@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { syncProfileRoleFromAuth } from "@/actions/profile";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,17 +13,23 @@ export default async function ClassroomsPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase.from("profiles").select("role, full_name").eq("id", user.id).single();
+  await syncProfileRoleFromAuth();
+
+  const { data: profile, error: profileError } = await supabase.from("profiles").select("role, full_name").eq("id", user.id).single();
+
+  const hasProfile = Boolean(profile) && !profileError;
+  /** Map DB role to UI; non-teacher values (including null) → student so join/create is never a blank page. */
+  const role: "teacher" | "student" | null = !hasProfile ? null : profile!.role === "teacher" ? "teacher" : "student";
 
   const teacherRooms =
-    profile?.role === "teacher"
+    role === "teacher"
       ? (
           await supabase.from("classrooms").select("id, name, join_code, created_at").eq("teacher_id", user.id).order("created_at", { ascending: false })
         ).data
       : null;
 
   const studentRows =
-    profile?.role === "student"
+    role === "student"
       ? (
           await supabase
             .from("classroom_members")
@@ -37,24 +44,47 @@ export default async function ClassroomsPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Classrooms</h1>
           <p className="text-muted-foreground">
-            {profile?.role === "teacher" ? "Manage join codes and open the teacher dashboard." : "Join with a code, then start a notebook for your team."}
+            {role === "teacher"
+              ? "Manage join codes and open the teacher dashboard."
+              : role === "student"
+                ? "Join with a code, then start a notebook for your team."
+                : "Sign in again if your profile didn’t load."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {profile?.role === "teacher" && (
+          {role === "teacher" && (
             <Button asChild>
               <Link href="/classrooms/new">New classroom</Link>
             </Button>
           )}
-          {profile?.role === "student" && (
+          {role === "student" && (
             <Button variant="outline" asChild>
               <Link href="/classrooms/join">Join with code</Link>
+            </Button>
+          )}
+          {role === null && (
+            <Button variant="outline" asChild>
+              <Link href="/login">Sign in</Link>
             </Button>
           )}
         </div>
       </div>
 
-      {profile?.role === "teacher" && (
+      {!hasProfile ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Profile not found</CardTitle>
+            <CardDescription>Try signing out and signing in again. If this keeps happening, your account may need a profile row in Supabase.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="outline" asChild>
+              <Link href="/login">Go to sign in</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {role === "teacher" && (
         <div className="space-y-3">
           {(teacherRooms ?? []).length === 0 ? (
             <Card>
@@ -84,7 +114,7 @@ export default async function ClassroomsPage() {
         </div>
       )}
 
-      {profile?.role === "student" && (
+      {role === "student" && (
         <div className="space-y-3">
           {(studentRows ?? []).length === 0 ? (
             <Card>

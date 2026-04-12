@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { syncProfileRoleFromAuth } from "@/actions/profile";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +13,12 @@ export default async function DashboardPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase.from("profiles").select("role, full_name").eq("id", user.id).single();
+  await syncProfileRoleFromAuth();
+
+  const { data: profile, error: profileError } = await supabase.from("profiles").select("role, full_name").eq("id", user.id).single();
+
+  const hasProfile = Boolean(profile) && !profileError;
+  const role: "teacher" | "student" | null = !hasProfile ? null : profile!.role === "teacher" ? "teacher" : "student";
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -24,18 +30,25 @@ export default async function DashboardPage() {
         <CardHeader>
           <CardTitle>Get started</CardTitle>
           <CardDescription>
-            {profile?.role === "teacher"
+            {role === "teacher"
               ? "Create a classroom and share the 6-digit join code with your teams."
-              : "Join a classroom with your teacher’s code, then create or open a project notebook."}
+              : role === "student"
+                ? "Join a classroom with your teacher’s code, then create or open a project notebook."
+                : "We couldn’t load your profile. Open Classrooms after signing in again, or use Sign in below."}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
           <Button asChild>
-            <Link href="/classrooms">{profile?.role === "teacher" ? "My classrooms" : "Classrooms"}</Link>
+            <Link href="/classrooms">{role === "teacher" ? "My classrooms" : "Classrooms"}</Link>
           </Button>
-          {profile?.role === "student" && (
+          {role === "student" && (
             <Button variant="outline" asChild>
               <Link href="/classrooms/join">Join with code</Link>
+            </Button>
+          )}
+          {role === null && (
+            <Button variant="outline" asChild>
+              <Link href="/login">Sign in</Link>
             </Button>
           )}
         </CardContent>
