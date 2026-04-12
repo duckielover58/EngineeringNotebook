@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/client";
+import { getAuthCallbackUrl } from "@/lib/site-url";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -46,10 +47,11 @@ export function SignupForm() {
       options: {
         data: {
           full_name: values.full_name,
-          role: values.role,
+          /** App role — avoid key `role` (reserved on JWT / auth). */
+          engilog_role: values.role,
           school_name: values.school_name ?? "",
         },
-        emailRedirectTo: typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined,
+        emailRedirectTo: getAuthCallbackUrl(),
       },
     });
     if (signError) {

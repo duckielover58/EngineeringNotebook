@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { syncProfileRoleFromAuth } from "@/actions/profile";
 import { createClient } from "@/lib/supabase/server";
 import { CreateClassroomForm } from "@/components/classrooms/create-classroom-form";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,8 @@ export default async function NewClassroomPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  await syncProfileRoleFromAuth();
 
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
   if (profile?.role !== "teacher") redirect("/classrooms");

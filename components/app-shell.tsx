@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BookOpen, GraduationCap, LayoutDashboard, Menu, Plus } from "lucide-react";
 
+import { syncProfileRoleFromAuth } from "@/actions/profile";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -8,10 +9,10 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SignOutButton } from "@/components/sign-out-button";
 
-const nav = [
+const navBase = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/classrooms", label: "Classrooms", icon: GraduationCap },
-  { href: "/classrooms/join", label: "Join class", icon: BookOpen },
+  { href: "/classrooms/join", label: "Join class", icon: BookOpen, studentOnly: true as const },
 ];
 
 export async function AppShell({ children }: { children: React.ReactNode }) {
@@ -24,7 +25,11 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
     return <TooltipProvider>{children}</TooltipProvider>;
   }
 
+  await syncProfileRoleFromAuth();
+
   const { data: profile } = await supabase.from("profiles").select("full_name, role").eq("id", user.id).single();
+
+  const nav = navBase.filter((item) => !("studentOnly" in item) || profile?.role === "student");
 
   const sidebar = (
     <div className="flex h-full flex-col gap-1 p-4">

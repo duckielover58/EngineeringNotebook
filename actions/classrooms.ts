@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { syncProfileRoleFromAuth } from "@/actions/profile";
 import { createClient } from "@/lib/supabase/server";
 import { randomSixDigitCode } from "@/lib/join-code";
 
@@ -14,6 +15,8 @@ export async function createClassroom(formData: FormData) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "You must be signed in." };
+
+  await syncProfileRoleFromAuth();
 
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
   if (profile?.role !== "teacher") return { error: "Only teachers can create classrooms." };
@@ -44,6 +47,8 @@ export async function joinClassroomByCode(code: string) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "You must be signed in." };
+
+  await syncProfileRoleFromAuth();
 
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
   if (profile?.role !== "student") return { error: "Only students join classrooms with a code." };
