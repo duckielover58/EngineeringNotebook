@@ -3,12 +3,14 @@ import { notFound, redirect } from "next/navigation";
 
 import { INACTIVE_PROJECT_DAYS } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/server";
+import { CoTeacherManager } from "@/components/classrooms/co-teacher-manager";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 type Props = { params: Promise<{ classroomId: string }> };
 
 type LogLite = { created_at: string };
+type TeacherRow = { teacher_id: string; profiles: { full_name: string } | { full_name: string }[] | null };
 
 function lastLogDate(logs: LogLite[] | null | undefined): Date | null {
   if (!logs?.length) return null;
@@ -36,7 +38,19 @@ export default async function TeacherClassroomDashboard({ params }: Props) {
 
   const { data: room, error } = await supabase.from("classrooms").select("id, name, join_code, teacher_id").eq("id", classroomId).single();
   if (error || !room) notFound();
-  if (room.teacher_id !== user.id) notFound();
+  const { data: teacherMembership } = await supabase
+    .from("classroom_teachers")
+    .select("teacher_id")
+    .eq("classroom_id", classroomId)
+    .eq("teacher_id", user.id)
+    .maybeSingle();
+  if (!teacherMembership) notFound();
+
+  const { data: teacherRows } = await supabase
+    .from("classroom_teachers")
+    .select("teacher_id, profiles(full_name)")
+    .eq("classroom_id", classroomId)
+    .order("created_at", { ascending: true });
 
   const { data: projects } = await supabase
     .from("projects")
@@ -61,6 +75,13 @@ export default async function TeacherClassroomDashboard({ params }: Props) {
           {room.name} · Join code <span className="font-mono tracking-widest">{room.join_code}</span>
         </p>
       </div>
+
+      <CoTeacherManager
+        classroomId={classroomId}
+        ownerId={room.teacher_id}
+        currentUserId={user.id}
+        rows={(teacherRows as TeacherRow[]) ?? []}
+      />
 
       <div className="grid gap-4 md:grid-cols-2">
         {(projects ?? []).map((p) => {

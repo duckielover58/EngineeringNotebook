@@ -24,7 +24,11 @@ export default async function ClassroomsPage() {
   const teacherRooms =
     role === "teacher"
       ? (
-          await supabase.from("classrooms").select("id, name, join_code, created_at").eq("teacher_id", user.id).order("created_at", { ascending: false })
+          await supabase
+            .from("classroom_teachers")
+            .select("classrooms(id, name, join_code, created_at)")
+            .eq("teacher_id", user.id)
+            .order("created_at", { ascending: false, referencedTable: "classrooms" })
         ).data
       : null;
 
@@ -94,7 +98,11 @@ export default async function ClassroomsPage() {
               </CardHeader>
             </Card>
           ) : (
-            teacherRooms!.map((c) => (
+            teacherRooms!.map((row) => {
+              const raw = row.classrooms as { id: string; name: string; join_code: string; created_at: string } | { id: string; name: string; join_code: string; created_at: string }[] | null;
+              const c = Array.isArray(raw) ? raw[0] : raw;
+              if (!c) return null;
+              return (
               <Card key={c.id}>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-lg">{c.name}</CardTitle>
@@ -109,7 +117,8 @@ export default async function ClassroomsPage() {
                   </Button>
                 </CardContent>
               </Card>
-            ))
+            );
+            })
           )}
         </div>
       )}

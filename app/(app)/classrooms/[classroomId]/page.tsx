@@ -2,10 +2,20 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
+import { CoTeacherManager } from "@/components/classrooms/co-teacher-manager";
+import { PendingProjectInvites } from "@/components/classrooms/pending-project-invites";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 type Props = { params: Promise<{ classroomId: string }> };
+type TeacherRow = { teacher_id: string; profiles: { full_name: string } | { full_name: string }[] | null };
+type PendingInviteRow = {
+  id: string;
+  project_id: string;
+  invitee_email: string;
+  created_at: string;
+  projects: { title: string } | { title: string }[] | null;
+};
 
 export default async function ClassroomDetailPage({ params }: Props) {
   const { classroomId } = await params;
@@ -19,7 +29,13 @@ export default async function ClassroomDetailPage({ params }: Props) {
   if (error || !room) notFound();
 
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  const isTeacher = profile?.role === "teacher" && room.teacher_id === user.id;
+  const { data: teacherMembership } = await supabase
+    .from("classroom_teachers")
+    .select("teacher_id")
+    .eq("classroom_id", classroomId)
+    .eq("teacher_id", user.id)
+    .maybeSingle();
+  const isTeacher = profile?.role === "teacher" && !!teacherMembership;
 
   const { data: projects } = await supabase
     .from("projects")
@@ -30,6 +46,25 @@ export default async function ClassroomDetailPage({ params }: Props) {
   const canCreate =
     profile?.role === "student" &&
     (await supabase.from("classroom_members").select("user_id").eq("classroom_id", classroomId).eq("user_id", user.id).maybeSingle()).data;
+
+  const { data: pendingInvites } =
+    profile?.role === "student"
+      ? await supabase
+          .from("project_invites")
+          .select("id, project_id, invitee_email, created_at, projects(title)")
+          .eq("classroom_id", classroomId)
+          .eq("status", "pending")
+          .ilike("invitee_email", user.email ?? "")
+          .order("created_at", { ascending: false })
+      : { data: [] as never[] };
+
+  const { data: teacherRows } = isTeacher
+    ? await supabase
+        .from("classroom_teachers")
+        .select("teacher_id, profiles(full_name)")
+        .eq("classroom_id", classroomId)
+        .order("created_at", { ascending: true })
+    : { data: [] as never[] };
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -55,6 +90,17 @@ export default async function ClassroomDetailPage({ params }: Props) {
           )}
         </div>
       </div>
+
+      {profile?.role === "student" && <PendingProjectInvites invites={(pendingInvites as PendingInviteRow[]) ?? []} />}
+
+      {isTeacher && (
+        <CoTeacherManager
+          classroomId={classroomId}
+          ownerId={room.teacher_id}
+          currentUserId={user.id}
+          rows={(teacherRows as TeacherRow[]) ?? []}
+        />
+      )}
 
       <Card>
         <CardHeader>

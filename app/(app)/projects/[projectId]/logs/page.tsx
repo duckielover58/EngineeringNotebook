@@ -12,6 +12,7 @@ export default async function ProjectLogsPage({ params }: Props) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
 
   const { data: project, error } = await supabase.from("projects").select("id, status").eq("id", projectId).single();
   if (error || !project) notFound();
@@ -23,5 +24,21 @@ export default async function ProjectLogsPage({ params }: Props) {
     .eq("project_id", projectId)
     .order("created_at", { ascending: false });
 
-  return <DailyLogSection projectId={projectId} initialLogs={logs ?? []} />;
+  const { data: logComments } = await supabase
+    .from("project_comments")
+    .select("id, body, created_at, teacher_id, anchor_section")
+    .eq("project_id", projectId)
+    .like("anchor_section", "daily_log:%")
+    .order("created_at", { ascending: true });
+
+  const commentsByLogId = (logComments ?? []).reduce<Record<string, { id: string; body: string; created_at: string; teacher_id: string }[]>>((acc, c) => {
+    const anchor = c.anchor_section ?? "";
+    const logId = anchor.startsWith("daily_log:") ? anchor.slice("daily_log:".length) : "";
+    if (!logId) return acc;
+    if (!acc[logId]) acc[logId] = [];
+    acc[logId].push({ id: c.id, body: c.body, created_at: c.created_at, teacher_id: c.teacher_id });
+    return acc;
+  }, {});
+
+  return <DailyLogSection projectId={projectId} initialLogs={logs ?? []} isTeacherView={profile?.role === "teacher"} commentsByLogId={commentsByLogId} />;
 }

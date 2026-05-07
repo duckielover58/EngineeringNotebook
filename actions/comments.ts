@@ -13,6 +13,8 @@ export async function addProjectComment(projectId: string, body: string, anchor_
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "You must be signed in." };
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  if (profile?.role !== "teacher") return { error: "Only teachers can add comments." };
 
   const { error } = await supabase.from("project_comments").insert({
     project_id: projectId,

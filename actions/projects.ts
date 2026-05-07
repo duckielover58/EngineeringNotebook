@@ -16,6 +16,14 @@ function validateMatrixRatings(matrix: number[][] | null, optionCount: number, c
   return null;
 }
 
+function friendlyProjectRlsMessage(raw: string | undefined): string {
+  const msg = raw ?? "";
+  if (/row-level security|violates row-level security/i.test(msg)) {
+    return "Could not create the notebook. Reload the page and try again. If you have not joined this class with its join code yet, use Join class first.";
+  }
+  return msg || "Could not create project.";
+}
+
 async function requireStudentUser() {
   const supabase = await createClient();
   const {
@@ -32,22 +40,60 @@ export async function createProject(classroomId: string, title: string) {
   if (!t) return { error: "Project title is required." };
   const auth = await requireStudentUser();
   if ("error" in auth) return auth;
-  const { supabase, userId } = auth;
+  const { supabase } = auth;
 
-  const { data: project, error } = await supabase
-    .from("projects")
-    .insert({ classroom_id: classroomId, title: t, status: "setup" })
-    .select("id")
-    .single();
-
-  if (error || !project) return { error: error?.message ?? "Could not create project." };
-
-  const { error: memberError } = await supabase.from("project_members").insert({ project_id: project.id, user_id: userId });
-  if (memberError) return { error: memberError.message };
+  const { data: projectId, error } = await supabase.rpc("create_project_for_student", {
+    p_classroom: classroomId,
+    p_title: t,
+  });
+  if (error || !projectId) return { error: friendlyProjectRlsMessage(error?.message) };
 
   revalidatePath(`/classrooms/${classroomId}`);
   revalidatePath("/classrooms");
-  return { ok: true as const, projectId: project.id };
+  return { ok: true as const, projectId: projectId as string };
+}
+
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase();
+}
+
+export async function inviteStudentToProject(projectId: string, email: string) {
+  const inviteeEmail = normalizeEmail(email);
+  if (!inviteeEmail || !inviteeEmail.includes("@")) return { error: "Enter a valid email address." };
+  const auth = await requireStudentUser();
+  if ("error" in auth) return auth;
+  const { supabase } = auth;
+
+  const { error } = await supabase.rpc("create_project_invite", {
+    p_project: projectId,
+    p_invitee_email: inviteeEmail,
+  });
+  if (error) return { error: error.message };
+  revalidatePath(`/projects/${projectId}`);
+  return { ok: true as const };
+}
+
+export async function acceptProjectInvite(inviteId: string) {
+  const auth = await requireStudentUser();
+  if ("error" in auth) return auth;
+  const { supabase } = auth;
+  const { data: projectId, error } = await supabase.rpc("accept_project_invite", { p_invite: inviteId });
+  if (error || !projectId) return { error: error?.message ?? "Could not accept invite." };
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath("/classrooms");
+  return { ok: true as const, projectId: projectId as string };
+}
+
+export async function revokeProjectInvite(inviteId: string, projectId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be signed in." };
+  const { error } = await supabase.rpc("revoke_project_invite", { p_invite: inviteId });
+  if (error) return { error: error.message };
+  revalidatePath(`/projects/${projectId}`);
+  return { ok: true as const };
 }
 
 export async function updateProjectBasics(

@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import { optionTotals, sortOptionIndexesByTotal, winningOptionIndex } from "@/lib/matrix";
+import { ProjectInvitePanel } from "@/components/projects/project-invite-panel";
 import { TeacherCommentsPanel } from "@/components/teacher/teacher-comments-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import type { GanttData } from "@/types/database";
 
 type Props = { params: Promise<{ projectId: string }> };
+type InviteRow = { id: string; invitee_email: string; status: "pending" | "accepted" | "revoked"; created_at: string };
 
 export default async function ProjectOverviewPage({ params }: Props) {
   const { projectId } = await params;
@@ -56,9 +58,20 @@ export default async function ProjectOverviewPage({ params }: Props) {
     );
   }
 
-  const rawClass = project.classrooms as { teacher_id: string } | { teacher_id: string }[] | null;
-  const classroom = Array.isArray(rawClass) ? rawClass[0] : rawClass;
-  const isClassTeacher = profile?.role === "teacher" && classroom?.teacher_id === user.id;
+  const { data: teacherMembership } = await supabase
+    .from("classroom_teachers")
+    .select("teacher_id")
+    .eq("classroom_id", project.classroom_id)
+    .eq("teacher_id", user.id)
+    .maybeSingle();
+  const isClassTeacher = profile?.role === "teacher" && !!teacherMembership;
+  const { data: memberRow } = await supabase
+    .from("project_members")
+    .select("user_id")
+    .eq("project_id", projectId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const canInviteStudents = profile?.role === "student" && !!memberRow;
 
   const matrix = (project.matrix_ratings as number[][] | null) ?? [];
   const options: string[] = (project.matrix_options as string[] | null) ?? [];
@@ -71,6 +84,13 @@ export default async function ProjectOverviewPage({ params }: Props) {
   const { data: comments } = await supabase
     .from("project_comments")
     .select("id, body, created_at, teacher_id")
+    .eq("project_id", projectId)
+    .eq("anchor_section", "overview")
+    .order("created_at", { ascending: false });
+
+  const { data: invites } = await supabase
+    .from("project_invites")
+    .select("id, invitee_email, status, created_at")
     .eq("project_id", projectId)
     .order("created_at", { ascending: false });
 
@@ -168,6 +188,8 @@ export default async function ProjectOverviewPage({ params }: Props) {
           )}
         </CardContent>
       </Card>
+
+      <ProjectInvitePanel projectId={projectId} canInvite={!!canInviteStudents} invites={(invites as InviteRow[]) ?? []} />
 
       {(isClassTeacher || (comments?.length ?? 0) > 0) && (
         <TeacherCommentsPanel projectId={projectId} isTeacher={!!isClassTeacher} initialComments={comments ?? []} />
