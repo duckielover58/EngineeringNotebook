@@ -110,8 +110,15 @@ export default async function ProjectOverviewPage({ params }: Props) {
           ) : (
             <ul className="space-y-1">
               {gantt.tasks.map((t) => (
-                <li key={t.id}>
-                  <span className="font-medium text-foreground">{t.name}</span> — start week {t.startWeek}, duration {t.durationWeeks} wk
+                <li key={t.id} className="flex items-center gap-2">
+                  <span className="inline-block size-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: t.color ?? "#6b7280" }} />
+                  <span className="font-medium text-foreground">{t.name}</span>
+                  {" — "}day {(t.startDay ?? 0) + 1}–{(t.startDay ?? 0) + (t.durationDays ?? 1)}
+                  {gantt.members && t.memberIds?.length > 0 && (
+                    <span className="text-xs">
+                      ({gantt.members.filter((m) => t.memberIds.includes(m.id)).map((m) => m.name).join(", ")})
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>

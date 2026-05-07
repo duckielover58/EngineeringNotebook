@@ -118,7 +118,7 @@ export function NotebookPdfExport({ project, logs }: { project: ProjectPayload; 
             <ul style={{ fontSize: 12 }}>
               {(project.gantt_data?.tasks ?? []).map((t) => (
                 <li key={t.id}>
-                  {t.name} — start {t.startWeek}, duration {t.durationWeeks} wk
+                  {t.name} — day {(t.startDay ?? 0) + 1}–{(t.startDay ?? 0) + (t.durationDays ?? 1)}
                 </li>
               ))}
             </ul>
