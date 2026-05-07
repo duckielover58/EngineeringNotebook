@@ -29,6 +29,14 @@ export async function createClassroom(formData: FormData) {
       .select("id")
       .single();
     if (!error && data) {
+      // Mirror the owner into classroom_teachers so RLS treats them as the
+      // classroom's teacher (is_classroom_teacher reads from this table).
+      const { error: teacherError } = await supabase
+        .from("classroom_teachers")
+        .insert({ classroom_id: data.id, teacher_id: user.id, added_by: user.id });
+      if (teacherError && teacherError.code !== "23505") {
+        return { error: teacherError.message };
+      }
       revalidatePath("/classrooms");
       return { ok: true as const, classroomId: data.id };
     }
