@@ -10,8 +10,8 @@ DECLARE
   base_email text;
   base_name text;
   base_role text;
-  user_id uuid;
-  identity_id uuid;
+  v_user_id uuid;
+  v_identity_id uuid;
   inst_id uuid;
 BEGIN
   SELECT i.id INTO inst_id FROM auth.instances i LIMIT 1;
@@ -30,10 +30,10 @@ BEGIN
   LOOP
     base_email := lower(base_name) || '@devtest.engilog.local';
 
-    SELECT u.id INTO user_id FROM auth.users u WHERE u.email = base_email LIMIT 1;
+    SELECT u.id INTO v_user_id FROM auth.users u WHERE u.email = base_email LIMIT 1;
 
-    IF user_id IS NULL THEN
-      user_id := gen_random_uuid();
+    IF v_user_id IS NULL THEN
+      v_user_id := gen_random_uuid();
       INSERT INTO auth.users (
         id,
         instance_id,
@@ -52,7 +52,7 @@ BEGIN
         recovery_token
       )
       VALUES (
-        user_id,
+        v_user_id,
         inst_id,
         'authenticated',
         'authenticated',
@@ -80,9 +80,9 @@ BEGIN
     END IF;
 
     IF NOT EXISTS (
-      SELECT 1 FROM auth.identities i WHERE i.user_id = user_id AND i.provider = 'email'
+      SELECT 1 FROM auth.identities i WHERE i.user_id = v_user_id AND i.provider = 'email'
     ) THEN
-      identity_id := gen_random_uuid();
+      v_identity_id := gen_random_uuid();
       INSERT INTO auth.identities (
         id,
         user_id,
@@ -94,11 +94,11 @@ BEGIN
         updated_at
       )
       VALUES (
-        identity_id,
-        user_id,
-        jsonb_build_object('sub', user_id::text, 'email', base_email),
+        v_identity_id,
+        v_user_id,
+        jsonb_build_object('sub', v_user_id::text, 'email', base_email),
         'email',
-        user_id::text,
+        v_user_id::text,
         now(),
         now(),
         now()
@@ -110,10 +110,10 @@ BEGIN
       encrypted_password = crypt('test123', gen_salt('bf')),
       email_confirmed_at = coalesce(email_confirmed_at, now()),
       updated_at = now()
-    WHERE id = user_id;
+    WHERE id = v_user_id;
 
     INSERT INTO public.profiles (id, full_name, role, school_name)
-    VALUES (user_id, base_name, base_role, 'DEV_TEST_ACCOUNTS')
+    VALUES (v_user_id, base_name, base_role, 'DEV_TEST_ACCOUNTS')
     ON CONFLICT (id) DO UPDATE
     SET
       full_name = excluded.full_name,
