@@ -3,9 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { createProject, updateProjectBasics } from "@/actions/projects";
-import { createClient } from "@/lib/supabase/client";
-import { uploadProjectFile } from "@/lib/storage-upload";
+import { createProject } from "@/actions/projects";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,7 +11,6 @@ import { Label } from "@/components/ui/label";
 export function NewProjectForm({ classroomId }: { classroomId: string }) {
   const router = useRouter();
   const [title, setTitle] = useState("");
-  const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -31,27 +28,8 @@ export function NewProjectForm({ classroomId }: { classroomId: string }) {
       setPending(false);
       return;
     }
-    const projectId = res.projectId;
-
-    try {
-      if (file) {
-        const supabase = createClient();
-        const url = await uploadProjectFile(supabase, "team-photos", projectId, file);
-        const up = await updateProjectBasics(projectId, { team_photo_url: url });
-        if ("error" in up && up.error) {
-          setPending(false);
-          setError(up.error);
-          return;
-        }
-      }
-    } catch (err) {
-      setPending(false);
-      setError(err instanceof Error ? err.message : "Upload failed");
-      return;
-    }
-
     setPending(false);
-    router.push(`/projects/${projectId}/setup`);
+    router.push(`/projects/${res.projectId}/setup`);
     router.refresh();
   }
 
@@ -60,11 +38,7 @@ export function NewProjectForm({ classroomId }: { classroomId: string }) {
       <div className="space-y-2">
         <Label htmlFor="title">Team / project title</Label>
         <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="Notebook title" />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="photo">Team photo (optional)</Label>
-        <Input id="photo" type="file" accept="image/*" capture="environment" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-        <p className="text-xs text-muted-foreground">JPEG or PNG works well on mobile workshop photos.</p>
+        <p className="text-xs text-muted-foreground">You can add the team photo and project details on the next step.</p>
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
       <Button type="submit" disabled={pending}>

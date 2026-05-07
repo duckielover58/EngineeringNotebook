@@ -1,9 +1,9 @@
-import Image from "next/image";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import { optionTotals, sortOptionIndexesByTotal, winningOptionIndex } from "@/lib/matrix";
+import { BrainstormingSketchesSection } from "@/components/projects/brainstorming-sketches-section";
 import { DeleteProjectButton } from "@/components/projects/delete-project-button";
 import { DesignBriefCard } from "@/components/projects/design-brief-card";
 import { GanttGridFromData } from "@/components/projects/gantt-grid";
@@ -226,38 +226,11 @@ export default async function ProjectOverviewPage({ params }: Props) {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Brainstorming sketches</CardTitle>
-          <CardDescription>Early concepts from the team.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {brainstormSketches.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No sketches on file.</p>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-3">
-              {brainstormSketches.map((s) => (
-                <div key={s.id} className="space-y-1">
-                  <div className="relative aspect-video overflow-hidden rounded-md border bg-muted">
-                    <Image src={s.url} alt="Brainstorming sketch" fill className="object-cover" sizes="200px" />
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {s.member_label ? (
-                      <>
-                        Drawn by <span className="font-medium text-foreground">{s.member_label}</span>
-                      </>
-                    ) : (
-                      <span className="italic">Unlabeled</span>
-                    )}
-                    {" · Uploaded "}
-                    {formatStamp(s.created_at)}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <BrainstormingSketchesSection
+        projectId={projectId}
+        initialSketches={brainstormSketches}
+        canEdit={isProjectMember}
+      />
 
       <Card>
         <CardHeader>

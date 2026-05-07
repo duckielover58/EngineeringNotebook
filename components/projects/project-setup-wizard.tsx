@@ -808,8 +808,8 @@ export function ProjectSetupWizard({
                       <th className="pb-2 pr-2 font-normal">Task name</th>
                       <th className="pb-2 pr-2 font-normal">Color</th>
                       {members.length > 0 && <th className="pb-2 pr-2 font-normal">Members</th>}
-                      <th className="pb-2 pr-2 font-normal w-24">Start week</th>
-                      <th className="pb-2 pr-2 font-normal w-24">Weeks</th>
+                      <th className="pb-2 pr-2 font-normal w-24">{ganttViewMode === "days" ? "Start day" : "Start week"}</th>
+                      <th className="pb-2 pr-2 font-normal w-24">{ganttViewMode === "days" ? "Days" : "Weeks"}</th>
                       <th className="pb-2 font-normal" />
                     </tr>
                   </thead>
@@ -854,8 +854,19 @@ export function ProjectSetupWizard({
                           <Input
                             type="number"
                             min={1}
-                            value={Math.floor(t.startDay / 5) + 1}
-                            onChange={(e) => setTaskField(idx, "startDay", Math.max(0, (Number(e.target.value) - 1) * 5))}
+                            value={
+                              ganttViewMode === "days"
+                                ? t.startDay + 1
+                                : Math.floor(t.startDay / 5) + 1
+                            }
+                            onChange={(e) => {
+                              const n = Number(e.target.value);
+                              if (ganttViewMode === "days") {
+                                setTaskField(idx, "startDay", Math.max(0, n - 1));
+                              } else {
+                                setTaskField(idx, "startDay", Math.max(0, (n - 1) * 5));
+                              }
+                            }}
                             className="h-8 w-24 text-center"
                           />
                         </td>
@@ -863,8 +874,19 @@ export function ProjectSetupWizard({
                           <Input
                             type="number"
                             min={1}
-                            value={Math.max(1, Math.ceil(t.durationDays / 5))}
-                            onChange={(e) => setTaskField(idx, "durationDays", Math.max(1, Number(e.target.value)) * 5)}
+                            value={
+                              ganttViewMode === "days"
+                                ? Math.max(1, t.durationDays)
+                                : Math.max(1, Math.ceil(t.durationDays / 5))
+                            }
+                            onChange={(e) => {
+                              const n = Math.max(1, Number(e.target.value));
+                              if (ganttViewMode === "days") {
+                                setTaskField(idx, "durationDays", n);
+                              } else {
+                                setTaskField(idx, "durationDays", n * 5);
+                              }
+                            }}
                             className="h-8 w-24 text-center"
                           />
                         </td>

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { updateProjectTitlePage } from "@/actions/projects";
 import { createClient } from "@/lib/supabase/client";
@@ -71,6 +71,19 @@ export function TitlePageForm({
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Live preview for a newly picked file (before save). Kept separate from the
+  // saved URL so we can clearly label which one is shown.
+  const localPreviewUrl = useMemo(
+    () => (photoFile ? URL.createObjectURL(photoFile) : null),
+    [photoFile],
+  );
+  useEffect(() => {
+    if (!localPreviewUrl) return;
+    return () => URL.revokeObjectURL(localPreviewUrl);
+  }, [localPreviewUrl]);
+  const previewSrc = localPreviewUrl ?? teamPhotoUrl;
+  const previewIsLocal = !!localPreviewUrl;
 
   async function save(): Promise<boolean> {
     setError(null);
@@ -146,7 +159,7 @@ export function TitlePageForm({
             id="school-name"
             value={schoolName}
             onChange={(e) => setSchoolName(e.target.value)}
-            placeholder="e.g. Westwood High School"
+            placeholder="e.g. American High School"
             disabled={busy}
           />
         </div>
@@ -156,7 +169,7 @@ export function TitlePageForm({
             id="course-title"
             value={courseTitle}
             onChange={(e) => setCourseTitle(e.target.value)}
-            placeholder="e.g. Engineering Design 1"
+            placeholder="e.g. POE H"
             disabled={busy}
           />
         </div>
@@ -175,10 +188,24 @@ export function TitlePageForm({
 
       <div className="space-y-2">
         <Label htmlFor="team-photo">Team photo</Label>
-        {teamPhotoUrl && (
-          <div className="relative aspect-video w-full max-w-md overflow-hidden rounded-md border bg-muted">
-            <Image src={teamPhotoUrl} alt="Team" fill className="object-cover" sizes="(max-width:768px) 100vw, 50vw" />
+        {previewSrc ? (
+          <div className="space-y-1">
+            <div className="relative aspect-video w-full max-w-md overflow-hidden rounded-md border bg-muted">
+              {previewIsLocal ? (
+                // Use a plain <img> for the local object URL preview so Next/Image's
+                // optimizer doesn't try to fetch a blob: URL.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={previewSrc} alt="Selected team photo preview" className="absolute inset-0 h-full w-full object-cover" />
+              ) : (
+                <Image src={previewSrc} alt="Team" fill className="object-cover" sizes="(max-width:768px) 100vw, 50vw" />
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {previewIsLocal ? "Selected file (not yet saved)" : "Saved team photo"}
+            </p>
           </div>
+        ) : (
+          <p className="text-xs text-muted-foreground italic">No team photo yet.</p>
         )}
         <Input
           id="team-photo"
