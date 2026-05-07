@@ -29,7 +29,7 @@ begin
         'authenticated',
         'authenticated',
         base_email,
-        crypt('test', gen_salt('bf')),
+        crypt('test123', gen_salt('bf')),
         now(),
         jsonb_build_object('provider', 'email', 'providers', array['email']),
         jsonb_build_object('full_name', base_name, 'role', base_role, 'engilog_role', base_role, 'dev_seed_tag', 'DEV_TEST_ACCOUNTS'),
@@ -45,5 +45,10 @@ begin
     update public.profiles
     set full_name = base_name, role = base_role, school_name = 'DEV_TEST_ACCOUNTS'
     where id = (select id from auth.users where email = base_email);
+
+    -- Keep password in sync (Supabase min length; re-run seed to reset after policy changes)
+    update auth.users
+    set encrypted_password = crypt('test123', gen_salt('bf')), updated_at = now()
+    where email = base_email;
   end loop;
 end $$;
