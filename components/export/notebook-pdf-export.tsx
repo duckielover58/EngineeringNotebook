@@ -6,7 +6,7 @@ import { useRef, useState } from "react";
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
 
-import { optionTotals, winningOptionIndex } from "@/lib/matrix";
+import { optionTotals, sortOptionIndexesByTotal, winningOptionIndex } from "@/lib/matrix";
 import type { GanttData } from "@/types/database";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,6 +32,7 @@ export function NotebookPdfExport({ project, logs }: { project: ProjectPayload; 
 
   const totals = project.matrix_ratings.length ? optionTotals(project.matrix_ratings) : [];
   const winnerIdx = totals.length ? winningOptionIndex(totals) : -1;
+  const rankedIndexes = sortOptionIndexesByTotal(totals);
   const latexHtml =
     project.technical_latex &&
     katex.renderToString(project.technical_latex, { throwOnError: false, displayMode: true });
@@ -109,16 +110,23 @@ export function NotebookPdfExport({ project, logs }: { project: ProjectPayload; 
             <h2 style={{ fontSize: 16, marginBottom: 8 }}>Decision matrix</h2>
             {winnerIdx >= 0 && (
               <p style={{ fontSize: 12 }}>
-                Winner: {project.matrix_options[winnerIdx]} (total {totals[winnerIdx]})
+                Leading option: {project.matrix_options[winnerIdx]} (total {totals[winnerIdx]})
               </p>
             )}
+            <ul style={{ fontSize: 12, marginTop: 6 }}>
+              {rankedIndexes.map((idx) => (
+                <li key={project.matrix_options[idx] ?? idx}>
+                  {project.matrix_options[idx]}: {totals[idx]}
+                </li>
+              ))}
+            </ul>
           </section>
           <section>
             <h2 style={{ fontSize: 16, marginBottom: 8 }}>Gantt</h2>
             <ul style={{ fontSize: 12 }}>
               {(project.gantt_data?.tasks ?? []).map((t) => (
                 <li key={t.id}>
-                  {t.name} — day {(t.startDay ?? 0) + 1}–{(t.startDay ?? 0) + (t.durationDays ?? 1)}
+                  {t.name} — week {Math.floor((t.startDay ?? 0) / 5) + 1}, {Math.max(1, Math.ceil((t.durationDays ?? 1) / 5))} week(s)
                 </li>
               ))}
             </ul>

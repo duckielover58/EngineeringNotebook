@@ -14,6 +14,8 @@ export default async function NewProjectPage({ params }: Props) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  if (profile?.role !== "student") redirect(`/classrooms/${classroomId}`);
 
   const { data: room, error } = await supabase.from("classrooms").select("id, name").eq("id", classroomId).single();
   if (error || !room) notFound();

@@ -28,10 +28,8 @@ export default async function ClassroomDetailPage({ params }: Props) {
     .order("created_at", { ascending: false });
 
   const canCreate =
-    isTeacher ||
-    (profile?.role === "student" &&
-      (await supabase.from("classroom_members").select("user_id").eq("classroom_id", classroomId).eq("user_id", user.id).maybeSingle())
-        .data);
+    profile?.role === "student" &&
+    (await supabase.from("classroom_members").select("user_id").eq("classroom_id", classroomId).eq("user_id", user.id).maybeSingle()).data;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">

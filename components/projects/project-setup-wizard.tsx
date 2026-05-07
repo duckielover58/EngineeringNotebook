@@ -32,7 +32,6 @@ const PRESET_COLORS = [
   "#ec4899",
   "#14b8a6",
 ];
-const DAY_LABELS = ["M", "T", "W", "R", "F"];
 
 function migrateGanttData(data: GanttData | null): { tasks: GanttTask[]; members: GanttMember[]; totalWeeks: number } {
   if (!data) return { tasks: defaultTasks(), members: [], totalWeeks: 3 };
@@ -74,11 +73,11 @@ type ProjectRow = {
 };
 
 function emptyCriteria(): string[] {
-  return ["", "", "", "", ""];
+  return ["", "", "", ""];
 }
 
-function defaultMatrixRows(optionCount: number): number[][] {
-  return Array.from({ length: optionCount }, () => [3, 3, 3, 3, 3]);
+function defaultMatrixRows(optionCount: number, criteriaCount: number): number[][] {
+  return Array.from({ length: optionCount }, () => Array.from({ length: criteriaCount }, () => 3));
 }
 
 export function ProjectSetupWizard({ project }: { project: ProjectRow }) {
@@ -91,11 +90,16 @@ export function ProjectSetupWizard({ project }: { project: ProjectRow }) {
   const [sketchUrls, setSketchUrls] = useState<string[]>(project.initial_sketch_urls ?? []);
 
   const initialOptions = project.matrix_options?.length ? project.matrix_options : ["Option A", "Option B", "Option C"];
-  const initialCriteria = project.matrix_criteria?.length === 5 ? project.matrix_criteria : emptyCriteria();
+  const initialCriteria = project.matrix_criteria?.length ? project.matrix_criteria : emptyCriteria();
   const initialRatings =
     project.matrix_ratings && project.matrix_ratings.length === initialOptions.length
-      ? project.matrix_ratings
-      : defaultMatrixRows(initialOptions.length);
+      ? project.matrix_ratings.map((row) =>
+          Array.from({ length: initialCriteria.length }, (_, idx) => {
+            const value = row?.[idx];
+            return Number.isInteger(value) ? Math.max(1, Math.min(5, value)) : 3;
+          }),
+        )
+      : defaultMatrixRows(initialOptions.length, initialCriteria.length);
 
   const [criteria, setCriteria] = useState<string[]>(initialCriteria);
   const [options, setOptions] = useState<string[]>(initialOptions);
@@ -118,7 +122,7 @@ export function ProjectSetupWizard({ project }: { project: ProjectRow }) {
     const clamped = Math.min(5, Math.max(1, Math.round(value)));
     setRatings((prev) => {
       const next = prev.map((r) => [...r]);
-      if (!next[row]) next[row] = [3, 3, 3, 3, 3];
+      if (!next[row]) next[row] = Array.from({ length: criteria.length }, () => 3);
       next[row][col] = clamped;
       return next;
     });
@@ -126,13 +130,24 @@ export function ProjectSetupWizard({ project }: { project: ProjectRow }) {
 
   function addOption() {
     setOptions((o) => [...o, `Option ${o.length + 1}`]);
-    setRatings((r) => [...r, [3, 3, 3, 3, 3]]);
+    setRatings((r) => [...r, Array.from({ length: criteria.length }, () => 3)]);
   }
 
   function removeOption(idx: number) {
     if (options.length <= 1) return;
     setOptions((o) => o.filter((_, i) => i !== idx));
     setRatings((r) => r.filter((_, i) => i !== idx));
+  }
+
+  function addCriterion() {
+    setCriteria((prev) => [...prev, ""]);
+    setRatings((prev) => prev.map((row) => [...row, 3]));
+  }
+
+  function removeCriterion(idx: number) {
+    if (criteria.length <= 1) return;
+    setCriteria((prev) => prev.filter((_, i) => i !== idx));
+    setRatings((prev) => prev.map((row) => row.filter((_, i) => i !== idx)));
   }
 
   async function saveSketches() {
@@ -200,6 +215,26 @@ export function ProjectSetupWizard({ project }: { project: ProjectRow }) {
 
   function setTaskField<K extends keyof GanttTask>(idx: number, key: K, value: GanttTask[K]) {
     setTasks((prev) => prev.map((t, i) => (i === idx ? { ...t, [key]: value } : t)));
+  }
+
+  function setTaskWeekRange(taskIdx: number, week: number) {
+    setTasks((prev) =>
+      prev.map((task, idx) => {
+        if (idx !== taskIdx) return task;
+        const startWeek = Math.floor(task.startDay / 5);
+        const taskWeeks = Math.max(1, Math.ceil(task.durationDays / 5));
+        const endExclusive = startWeek + taskWeeks;
+        if (week >= startWeek && week < endExclusive) {
+          return task;
+        }
+        if (week < startWeek) {
+          const newWeeks = endExclusive - week;
+          return { ...task, startDay: week * 5, durationDays: newWeeks * 5 };
+        }
+        const newWeeks = week - startWeek + 1;
+        return { ...task, startDay: startWeek * 5, durationDays: newWeeks * 5 };
+      }),
+    );
   }
 
   async function saveGantt() {
@@ -292,13 +327,23 @@ export function ProjectSetupWizard({ project }: { project: ProjectRow }) {
         <Card>
           <CardHeader>
             <CardTitle>Decision matrix</CardTitle>
-            <CardDescription>Five categories rate each design option. 1 is best, 5 is worst. Lowest total wins.</CardDescription>
+            <CardDescription>Rate each design option across your criteria. 1 is low and 5 is high. Highest total leads.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 overflow-x-auto">
-            <div className="grid gap-2 md:grid-cols-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={addCriterion}>
+                Add criterion
+              </Button>
+            </div>
+            <div className="grid gap-2 md:grid-cols-4">
               {criteria.map((c, i) => (
                 <div key={i} className="space-y-1">
-                  <Label>Category {i + 1}</Label>
+                  <div className="flex items-center justify-between">
+                    <Label>Category {i + 1}</Label>
+                    <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => removeCriterion(i)} disabled={criteria.length <= 1}>
+                      Delete
+                    </Button>
+                  </div>
                   <Input value={c} onChange={(e) => setCriteria((prev) => prev.map((x, j) => (j === i ? e.target.value : x)))} placeholder={`Criterion ${i + 1}`} />
                 </div>
               ))}
@@ -359,7 +404,7 @@ export function ProjectSetupWizard({ project }: { project: ProjectRow }) {
             </Table>
             {winnerIdx >= 0 && (
               <p className="text-sm text-muted-foreground">
-                Current winner: <span className="font-medium text-foreground">{options[winnerIdx] || `Option ${winnerIdx + 1}`}</span> (total{" "}
+                Leading option: <span className="font-medium text-foreground">{options[winnerIdx] || `Option ${winnerIdx + 1}`}</span> (total{" "}
                 {totals[winnerIdx]})
               </p>
             )}
@@ -374,7 +419,7 @@ export function ProjectSetupWizard({ project }: { project: ProjectRow }) {
         <Card>
           <CardHeader>
             <CardTitle>Gantt chart</CardTitle>
-            <CardDescription>Plan tasks by day. Add team members, assign colors, then mark each task's start and duration.</CardDescription>
+            <CardDescription>Plan tasks by week. Add students with colors, then click weekly cells to quickly place each task.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
 
@@ -441,8 +486,8 @@ export function ProjectSetupWizard({ project }: { project: ProjectRow }) {
                       <th className="pb-2 pr-2 font-normal">Task name</th>
                       <th className="pb-2 pr-2 font-normal">Color</th>
                       {members.length > 0 && <th className="pb-2 pr-2 font-normal">Members</th>}
-                      <th className="pb-2 pr-2 font-normal w-20">Start day</th>
-                      <th className="pb-2 pr-2 font-normal w-20">Days</th>
+                      <th className="pb-2 pr-2 font-normal w-24">Start week</th>
+                      <th className="pb-2 pr-2 font-normal w-24">Weeks</th>
                       <th className="pb-2 font-normal" />
                     </tr>
                   </thead>
@@ -487,18 +532,18 @@ export function ProjectSetupWizard({ project }: { project: ProjectRow }) {
                           <Input
                             type="number"
                             min={1}
-                            value={t.startDay + 1}
-                            onChange={(e) => setTaskField(idx, "startDay", Math.max(0, Number(e.target.value) - 1))}
-                            className="h-8 w-20 text-center"
+                            value={Math.floor(t.startDay / 5) + 1}
+                            onChange={(e) => setTaskField(idx, "startDay", Math.max(0, (Number(e.target.value) - 1) * 5))}
+                            className="h-8 w-24 text-center"
                           />
                         </td>
                         <td className="py-1.5 pr-2">
                           <Input
                             type="number"
                             min={1}
-                            value={t.durationDays}
-                            onChange={(e) => setTaskField(idx, "durationDays", Math.max(1, Number(e.target.value)))}
-                            className="h-8 w-20 text-center"
+                            value={Math.max(1, Math.ceil(t.durationDays / 5))}
+                            onChange={(e) => setTaskField(idx, "durationDays", Math.max(1, Number(e.target.value)) * 5)}
+                            className="h-8 w-24 text-center"
                           />
                         </td>
                         <td className="py-1.5">
@@ -538,7 +583,7 @@ export function ProjectSetupWizard({ project }: { project: ProjectRow }) {
             {/* ── Visual Gantt grid ── */}
             <div className="space-y-2">
               <div className="flex items-center gap-3">
-                <p className="text-sm font-medium">Preview</p>
+                <p className="text-sm font-medium">Weekly planning grid</p>
                 <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                   <button type="button" className="rounded border px-1.5 py-0.5 hover:bg-muted" onClick={() => setTotalWeeks((w) => Math.max(1, w - 1))}>−</button>
                   <span>{totalWeeks} {totalWeeks === 1 ? "week" : "weeks"}</span>
@@ -554,21 +599,10 @@ export function ProjectSetupWizard({ project }: { project: ProjectRow }) {
                         <th className="border-b border-r px-2 py-1 text-left font-medium text-muted-foreground whitespace-nowrap">Members</th>
                       )}
                       {Array.from({ length: totalWeeks }, (_, w) => (
-                        <th key={w} colSpan={5} className="border-b border-l px-1 py-1 text-center font-medium">
+                        <th key={w} className="border-b border-l px-2 py-1 text-center font-medium">
                           Week {w + 1}
                         </th>
                       ))}
-                    </tr>
-                    <tr className="bg-muted/30">
-                      <th className="border-b border-r" />
-                      {members.length > 0 && <th className="border-b border-r" />}
-                      {Array.from({ length: totalWeeks }, (_, w) =>
-                        DAY_LABELS.map((d) => (
-                          <th key={`${w}-${d}`} className="w-7 border-b border-l py-0.5 text-center font-normal text-muted-foreground">
-                            {d}
-                          </th>
-                        )),
-                      )}
                     </tr>
                   </thead>
                   <tbody>
@@ -577,7 +611,7 @@ export function ProjectSetupWizard({ project }: { project: ProjectRow }) {
                         <td colSpan={99} className="px-3 py-4 text-center text-muted-foreground">No tasks yet</td>
                       </tr>
                     )}
-                    {tasks.map((t) => {
+                    {tasks.map((t, taskIdx) => {
                       const taskMembers = members.filter((m) => t.memberIds.includes(m.id));
                       return (
                         <tr key={t.id} className="border-b last:border-0">
@@ -591,26 +625,26 @@ export function ProjectSetupWizard({ project }: { project: ProjectRow }) {
                                 : <span className="italic opacity-50">—</span>}
                             </td>
                           )}
-                          {Array.from({ length: totalWeeks * 5 }, (_, d) => {
-                            const active = d >= t.startDay && d < t.startDay + t.durationDays;
-                            const isFirst = d === t.startDay;
-                            const isLast = d === t.startDay + t.durationDays - 1;
+                          {Array.from({ length: totalWeeks }, (_, w) => {
+                            const taskStartWeek = Math.floor(t.startDay / 5);
+                            const taskWeeks = Math.max(1, Math.ceil(t.durationDays / 5));
+                            const active = w >= taskStartWeek && w < taskStartWeek + taskWeeks;
+                            const displayColor = taskMembers[0]?.color ?? t.color;
                             return (
                               <td
-                                key={d}
+                                key={w}
                                 className={cn(
-                                  "h-7 w-7 border-l",
+                                  "h-8 w-20 border-l cursor-pointer transition-colors",
                                   active ? "" : "bg-background",
-                                  d % 5 === 0 && d > 0 ? "border-l-border" : "border-l-border/40",
                                 )}
                                 style={
                                   active
                                     ? {
-                                        backgroundColor: t.color + "cc",
-                                        borderRadius: `${isFirst ? "4px" : "0"} ${isLast ? "4px" : "0"} ${isLast ? "4px" : "0"} ${isFirst ? "4px" : "0"}`,
+                                        backgroundColor: displayColor + "cc",
                                       }
                                     : undefined
                                 }
+                                onClick={() => setTaskWeekRange(taskIdx, w)}
                               />
                             );
                           })}

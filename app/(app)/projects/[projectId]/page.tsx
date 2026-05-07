@@ -1,11 +1,13 @@
 import Image from "next/image";
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
-import { optionTotals, winningOptionIndex } from "@/lib/matrix";
+import { optionTotals, sortOptionIndexesByTotal, winningOptionIndex } from "@/lib/matrix";
 import { TeacherCommentsPanel } from "@/components/teacher/teacher-comments-panel";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { GanttData } from "@/types/database";
 
 type Props = { params: Promise<{ projectId: string }> };
@@ -29,7 +31,30 @@ export default async function ProjectOverviewPage({ params }: Props) {
     .single();
 
   if (error || !project) notFound();
-  if (project.status === "setup") redirect(`/projects/${projectId}/setup`);
+
+  if (project.status === "setup") {
+    if (profile?.role === "student") {
+      redirect(`/projects/${projectId}/setup`);
+    }
+    return (
+      <div className="mx-auto max-w-lg space-y-4">
+        <Badge variant="secondary">Status: setup</Badge>
+        <Card>
+          <CardHeader>
+            <CardTitle>Notebook setup in progress</CardTitle>
+            <CardDescription>
+              The team is still completing setup. This page will show the full notebook after they activate it.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild variant="outline">
+              <Link href={`/classrooms/${project.classroom_id}`}>Back to classroom</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const rawClass = project.classrooms as { teacher_id: string } | { teacher_id: string }[] | null;
   const classroom = Array.isArray(rawClass) ? rawClass[0] : rawClass;
@@ -39,6 +64,7 @@ export default async function ProjectOverviewPage({ params }: Props) {
   const options: string[] = (project.matrix_options as string[] | null) ?? [];
   const totals = matrix.length && options.length ? optionTotals(matrix) : [];
   const winnerIdx = totals.length ? winningOptionIndex(totals) : -1;
+  const rankedIndexes = sortOptionIndexesByTotal(totals);
 
   const gantt = project.gantt_data as GanttData | null;
 
@@ -74,7 +100,7 @@ export default async function ProjectOverviewPage({ params }: Props) {
         <Card>
           <CardHeader>
             <CardTitle>Decision matrix</CardTitle>
-            <CardDescription>1 = best, 5 = worst · lowest total wins</CardDescription>
+            <CardDescription>Scores from 1 to 5 per category · highest total leads</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             {options.length === 0 ? (
@@ -88,9 +114,9 @@ export default async function ProjectOverviewPage({ params }: Props) {
                   </span>
                 </p>
                 <ul className="list-inside list-disc text-muted-foreground">
-                  {options.map((o: string, i: number) => (
-                    <li key={o}>
-                      {o}: total {totals[i] ?? "—"}
+                  {rankedIndexes.map((i) => (
+                    <li key={options[i] ?? i}>
+                      {options[i]}: total {totals[i] ?? "—"}
                     </li>
                   ))}
                 </ul>
@@ -113,7 +139,7 @@ export default async function ProjectOverviewPage({ params }: Props) {
                 <li key={t.id} className="flex items-center gap-2">
                   <span className="inline-block size-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: t.color ?? "#6b7280" }} />
                   <span className="font-medium text-foreground">{t.name}</span>
-                  {" — "}day {(t.startDay ?? 0) + 1}–{(t.startDay ?? 0) + (t.durationDays ?? 1)}
+                  {" — "}week {Math.floor((t.startDay ?? 0) / 5) + 1}, {Math.max(1, Math.ceil((t.durationDays ?? 1) / 5))} week(s)
                   {gantt.members && t.memberIds?.length > 0 && (
                     <span className="text-xs">
                       ({gantt.members.filter((m) => t.memberIds.includes(m.id)).map((m) => m.name).join(", ")})

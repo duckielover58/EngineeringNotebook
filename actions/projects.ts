@@ -10,21 +10,29 @@ function validateMatrixRatings(matrix: number[][] | null, optionCount: number, c
   for (const row of matrix) {
     if (!row || row.length !== criteriaCount) return "Matrix is incomplete.";
     for (const cell of row) {
-      if (!Number.isInteger(cell) || cell < 1 || cell > 5) return "Each score must be between 1 (best) and 5 (worst).";
+      if (!Number.isInteger(cell) || cell < 1 || cell > 5) return "Each score must be between 1 and 5.";
     }
   }
   return null;
 }
 
-export async function createProject(classroomId: string, title: string) {
-  const t = title.trim();
-  if (!t) return { error: "Project title is required." };
-
+async function requireStudentUser() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "You must be signed in." };
+  if (!user) return { error: "You must be signed in." as const };
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  if (profile?.role !== "student") return { error: "Only students can edit notebooks." as const };
+  return { supabase, userId: user.id };
+}
+
+export async function createProject(classroomId: string, title: string) {
+  const t = title.trim();
+  if (!t) return { error: "Project title is required." };
+  const auth = await requireStudentUser();
+  if ("error" in auth) return auth;
+  const { supabase, userId } = auth;
 
   const { data: project, error } = await supabase
     .from("projects")
@@ -34,7 +42,7 @@ export async function createProject(classroomId: string, title: string) {
 
   if (error || !project) return { error: error?.message ?? "Could not create project." };
 
-  const { error: memberError } = await supabase.from("project_members").insert({ project_id: project.id, user_id: user.id });
+  const { error: memberError } = await supabase.from("project_members").insert({ project_id: project.id, user_id: userId });
   if (memberError) return { error: memberError.message };
 
   revalidatePath(`/classrooms/${classroomId}`);
@@ -46,7 +54,9 @@ export async function updateProjectBasics(
   projectId: string,
   payload: { title?: string; team_photo_url?: string | null }
 ) {
-  const supabase = await createClient();
+  const auth = await requireStudentUser();
+  if ("error" in auth) return auth;
+  const { supabase } = auth;
   const { error } = await supabase.from("projects").update(payload).eq("id", projectId);
   if (error) return { error: error.message };
   revalidatePath(`/projects/${projectId}`);
@@ -54,7 +64,9 @@ export async function updateProjectBasics(
 }
 
 export async function updateProjectSketches(projectId: string, urls: string[]) {
-  const supabase = await createClient();
+  const auth = await requireStudentUser();
+  if ("error" in auth) return auth;
+  const { supabase } = auth;
   const { error } = await supabase.from("projects").update({ initial_sketch_urls: urls }).eq("id", projectId);
   if (error) return { error: error.message };
   revalidatePath(`/projects/${projectId}`);
@@ -69,15 +81,17 @@ export async function updateProjectMatrix(
     matrix_ratings: number[][];
   }
 ) {
-  if (payload.matrix_criteria.length !== 5) return { error: "Define exactly 5 categories." };
+  if (payload.matrix_criteria.length < 1) return { error: "Add at least one category." };
   if (payload.matrix_criteria.some((c) => !c.trim())) return { error: "Each category needs a name." };
   if (payload.matrix_options.length < 1) return { error: "Add at least one design option." };
   if (payload.matrix_options.some((o) => !o.trim())) return { error: "Each option needs a name." };
 
-  const err = validateMatrixRatings(payload.matrix_ratings, payload.matrix_options.length, 5);
+  const err = validateMatrixRatings(payload.matrix_ratings, payload.matrix_options.length, payload.matrix_criteria.length);
   if (err) return { error: err };
 
-  const supabase = await createClient();
+  const auth = await requireStudentUser();
+  if ("error" in auth) return auth;
+  const { supabase } = auth;
   const { error } = await supabase
     .from("projects")
     .update({
@@ -93,7 +107,9 @@ export async function updateProjectMatrix(
 }
 
 export async function updateProjectGantt(projectId: string, gantt_data: GanttData) {
-  const supabase = await createClient();
+  const auth = await requireStudentUser();
+  if ("error" in auth) return auth;
+  const { supabase } = auth;
   const { error } = await supabase.from("projects").update({ gantt_data }).eq("id", projectId);
   if (error) return { error: error.message };
   revalidatePath(`/projects/${projectId}`);
@@ -101,7 +117,9 @@ export async function updateProjectGantt(projectId: string, gantt_data: GanttDat
 }
 
 export async function updateProjectTechnicals(projectId: string, technical_latex: string) {
-  const supabase = await createClient();
+  const auth = await requireStudentUser();
+  if ("error" in auth) return auth;
+  const { supabase } = auth;
   const { error } = await supabase.from("projects").update({ technical_latex }).eq("id", projectId);
   if (error) return { error: error.message };
   revalidatePath(`/projects/${projectId}`);
@@ -109,7 +127,9 @@ export async function updateProjectTechnicals(projectId: string, technical_latex
 }
 
 export async function updateFinalSketches(projectId: string, urls: string[]) {
-  const supabase = await createClient();
+  const auth = await requireStudentUser();
+  if ("error" in auth) return auth;
+  const { supabase } = auth;
   const { error } = await supabase.from("projects").update({ final_sketch_urls: urls }).eq("id", projectId);
   if (error) return { error: error.message };
   revalidatePath(`/projects/${projectId}`);
@@ -117,7 +137,9 @@ export async function updateFinalSketches(projectId: string, urls: string[]) {
 }
 
 export async function activateProject(projectId: string) {
-  const supabase = await createClient();
+  const auth = await requireStudentUser();
+  if ("error" in auth) return auth;
+  const { supabase } = auth;
   const { error } = await supabase.from("projects").update({ status: "active" }).eq("id", projectId);
   if (error) return { error: error.message };
   revalidatePath(`/projects/${projectId}`);
