@@ -1,38 +1,75 @@
 -- DEV_TEST_ACCOUNTS: remove after development with supabase/seed.cleanup.sql
-do $$
-declare
+--
+-- Supabase Auth needs both auth.users and auth.identities (email provider) for
+-- signInWithPassword to work. Also set instance_id (from auth.instances on hosted projects).
+
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+DO $$
+DECLARE
   base_email text;
   base_name text;
   base_role text;
   user_id uuid;
-begin
-  for base_name, base_role in
-    values
+  identity_id uuid;
+  inst_id uuid;
+BEGIN
+  SELECT i.id INTO inst_id FROM auth.instances i LIMIT 1;
+  IF inst_id IS NULL THEN
+    inst_id := '00000000-0000-0000-0000-000000000000'::uuid;
+  END IF;
+
+  FOR base_name, base_role IN
+    VALUES
       ('Student1', 'student'),
       ('Student2', 'student'),
       ('Student3', 'student'),
       ('Student4', 'student'),
       ('Student5', 'student'),
       ('Teacher1', 'teacher')
-  loop
+  LOOP
     base_email := lower(base_name) || '@devtest.engilog.local';
-    user_id := gen_random_uuid();
 
-    if not exists (select 1 from auth.users u where u.email = base_email) then
-      insert into auth.users (
-        id, aud, role, email, encrypted_password, email_confirmed_at,
-        raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
-        confirmation_token, recovery_token, email_change_token_new, email_change
+    SELECT u.id INTO user_id FROM auth.users u WHERE u.email = base_email LIMIT 1;
+
+    IF user_id IS NULL THEN
+      user_id := gen_random_uuid();
+      INSERT INTO auth.users (
+        id,
+        instance_id,
+        aud,
+        role,
+        email,
+        encrypted_password,
+        email_confirmed_at,
+        raw_app_meta_data,
+        raw_user_meta_data,
+        created_at,
+        updated_at,
+        confirmation_token,
+        email_change,
+        email_change_token_new,
+        recovery_token
       )
-      values (
+      VALUES (
         user_id,
+        inst_id,
         'authenticated',
         'authenticated',
         base_email,
         crypt('test123', gen_salt('bf')),
         now(),
-        jsonb_build_object('provider', 'email', 'providers', array['email']),
-        jsonb_build_object('full_name', base_name, 'role', base_role, 'engilog_role', base_role, 'dev_seed_tag', 'DEV_TEST_ACCOUNTS'),
+        '{"provider":"email","providers":["email"]}'::jsonb,
+        jsonb_build_object(
+          'full_name',
+          base_name,
+          'role',
+          base_role,
+          'engilog_role',
+          base_role,
+          'dev_seed_tag',
+          'DEV_TEST_ACCOUNTS'
+        ),
         now(),
         now(),
         '',
@@ -40,15 +77,47 @@ begin
         '',
         ''
       );
-    end if;
+    END IF;
 
-    update public.profiles
-    set full_name = base_name, role = base_role, school_name = 'DEV_TEST_ACCOUNTS'
-    where id = (select id from auth.users where email = base_email);
+    IF NOT EXISTS (
+      SELECT 1 FROM auth.identities i WHERE i.user_id = user_id AND i.provider = 'email'
+    ) THEN
+      identity_id := gen_random_uuid();
+      INSERT INTO auth.identities (
+        id,
+        user_id,
+        identity_data,
+        provider,
+        provider_id,
+        last_sign_in_at,
+        created_at,
+        updated_at
+      )
+      VALUES (
+        identity_id,
+        user_id,
+        jsonb_build_object('sub', user_id::text, 'email', base_email),
+        'email',
+        user_id::text,
+        now(),
+        now(),
+        now()
+      );
+    END IF;
 
-    -- Keep password in sync (Supabase min length; re-run seed to reset after policy changes)
-    update auth.users
-    set encrypted_password = crypt('test123', gen_salt('bf')), updated_at = now()
-    where email = base_email;
-  end loop;
-end $$;
+    UPDATE auth.users
+    SET
+      encrypted_password = crypt('test123', gen_salt('bf')),
+      email_confirmed_at = coalesce(email_confirmed_at, now()),
+      updated_at = now()
+    WHERE id = user_id;
+
+    INSERT INTO public.profiles (id, full_name, role, school_name)
+    VALUES (user_id, base_name, base_role, 'DEV_TEST_ACCOUNTS')
+    ON CONFLICT (id) DO UPDATE
+    SET
+      full_name = excluded.full_name,
+      role = excluded.role,
+      school_name = excluded.school_name;
+  END LOOP;
+END $$;
