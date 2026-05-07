@@ -19,7 +19,19 @@ export async function syncProfileRoleFromAuth() {
   if (raw !== "teacher" && raw !== "student") return;
 
   const { data: row } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
-  if (!row) return;
+
+  if (!row) {
+    // Profile row is missing (trigger may not have fired); create it now.
+    const role = (raw === "teacher" || raw === "student") ? raw : "student";
+    await supabase.from("profiles").insert({
+      id: user.id,
+      full_name: String(meta?.full_name ?? ""),
+      role,
+      school_name: String(meta?.school_name ?? ""),
+    });
+    return;
+  }
+
   if (row.role === raw) return;
 
   await supabase.from("profiles").update({ role: raw }).eq("id", user.id);
