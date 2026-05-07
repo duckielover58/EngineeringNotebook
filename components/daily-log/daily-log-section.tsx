@@ -30,12 +30,14 @@ function LogCard({
   canEditLog,
   isTeacherView,
   comments,
+  teacherNamesById,
 }: {
   log: Log;
   projectId: string;
   canEditLog: boolean;
   isTeacherView: boolean;
   comments: CommentRow[];
+  teacherNamesById: Record<string, string>;
 }) {
   const router = useRouter();
   const editable = useLogEditable(log.created_at, log.is_locked);
@@ -127,12 +129,18 @@ function LogCard({
             <p className="text-xs text-muted-foreground">No teacher comments for this log yet.</p>
           ) : (
             <ul className="space-y-2">
-              {comments.map((c) => (
-                <li key={c.id} className="rounded border bg-yellow-50/80 p-2 text-xs dark:bg-yellow-950/30">
-                  <p>{c.body}</p>
-                  <p className="mt-1 text-muted-foreground">{new Date(c.created_at).toLocaleString()}</p>
-                </li>
-              ))}
+              {comments.map((c) => {
+                const author = teacherNamesById[c.teacher_id] ?? "Teacher";
+                return (
+                  <li key={c.id} className="rounded border bg-yellow-50/80 p-2 text-xs dark:bg-yellow-950/30">
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <span className="font-semibold text-foreground">{author}</span>
+                      <span className="text-muted-foreground">{new Date(c.created_at).toLocaleString()}</span>
+                    </div>
+                    <p className="whitespace-pre-wrap">{c.body}</p>
+                  </li>
+                );
+              })}
             </ul>
           )}
           {isTeacherView && (
@@ -160,11 +168,13 @@ export function DailyLogSection({
   initialLogs,
   isTeacherView,
   commentsByLogId,
+  teacherNamesById,
 }: {
   projectId: string;
   initialLogs: Log[];
   isTeacherView: boolean;
   commentsByLogId: Record<string, CommentRow[]>;
+  teacherNamesById: Record<string, string>;
 }) {
   const router = useRouter();
   const canEditLogs = !isTeacherView;
@@ -236,6 +246,7 @@ export function DailyLogSection({
               canEditLog={canEditLogs}
               isTeacherView={isTeacherView}
               comments={commentsByLogId[log.id] ?? []}
+              teacherNamesById={teacherNamesById}
             />
           ))
         )}

@@ -12,6 +12,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import type { ProjectSketch } from "@/types/database";
 
+type Props = {
+  projectId: string;
+  initialSketches: ProjectSketch[];
+  canEdit: boolean;
+};
+
 function formatStamp(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const d = new Date(iso);
@@ -19,20 +25,12 @@ function formatStamp(iso: string | null | undefined): string | null {
   return d.toLocaleDateString();
 }
 
-export function FinalSketchesForm({
-  projectId,
-  initialSketches,
-  canEdit,
-}: {
-  projectId: string;
-  initialSketches: ProjectSketch[];
-  canEdit: boolean;
-}) {
+export function InitialDesignSketchSection({ projectId, initialSketches, canEdit }: Props) {
   const router = useRouter();
   const [sketches, setSketches] = useState<ProjectSketch[]>(initialSketches);
   const [files, setFiles] = useState<File[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function save() {
     setError(null);
@@ -42,7 +40,7 @@ export function FinalSketchesForm({
       const inserted: ProjectSketch[] = [];
       for (const f of files) {
         const url = await uploadProjectFile(supabase, "sketches", projectId, f);
-        const res = await addProjectSketch(projectId, "final", url);
+        const res = await addProjectSketch(projectId, "initial_design", url);
         if ("error" in res && res.error) {
           setError(res.error);
           setPending(false);
@@ -78,21 +76,20 @@ export function FinalSketchesForm({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Final design sketches</CardTitle>
-        <CardDescription>Compare and document your final concept photos.</CardDescription>
+        <CardTitle>Initial design sketch</CardTitle>
+        <CardDescription>
+          The chosen direction from the brainstorming + decision matrix. Upload polished sketches of the path forward before final comparison.
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {canEdit && (
-          <Input type="file" accept="image/*" multiple capture="environment" onChange={(e) => setFiles(Array.from(e.target.files ?? []))} />
-        )}
         {sketches.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No final sketches yet.</p>
+          <p className="text-sm text-muted-foreground">No initial design sketches yet.</p>
         ) : (
           <div className="grid gap-3 sm:grid-cols-3">
             {sketches.map((s) => (
               <div key={s.id} className="space-y-1">
                 <div className="relative aspect-video overflow-hidden rounded-md border bg-muted">
-                  <Image src={s.url} alt="Final sketch" fill className="object-cover" sizes="200px" />
+                  <Image src={s.url} alt="Initial design sketch" fill className="object-cover" sizes="200px" />
                   {canEdit && (
                     <Button
                       type="button"
@@ -111,11 +108,21 @@ export function FinalSketchesForm({
             ))}
           </div>
         )}
-        {error && <p className="text-sm text-destructive">{error}</p>}
+
         {canEdit && (
-          <Button onClick={save} disabled={pending || files.length === 0}>
-            {pending ? "Saving…" : "Save uploads"}
-          </Button>
+          <div className="space-y-2">
+            <Input
+              type="file"
+              accept="image/*"
+              multiple
+              capture="environment"
+              onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+            />
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <Button onClick={save} disabled={pending || files.length === 0}>
+              {pending ? "Saving…" : "Save uploads"}
+            </Button>
+          </div>
         )}
       </CardContent>
     </Card>

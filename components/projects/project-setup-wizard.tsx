@@ -5,16 +5,32 @@ import { useRouter } from "next/navigation";
 
 import {
   activateProject,
-  updateFinalSketches,
+  addProjectSketch,
+  removeProjectSketch,
   updateProjectGantt,
   updateProjectMatrix,
-  updateProjectSketches,
+  updateProjectSketchLabel,
 } from "@/actions/projects";
 import { createClient } from "@/lib/supabase/client";
 import { uploadProjectFile } from "@/lib/storage-upload";
 import { optionTotals, winningOptionIndex } from "@/lib/matrix";
 import { cn } from "@/lib/utils";
-import type { GanttData, GanttMember, GanttTask, ProjectStatus } from "@/types/database";
+import type {
+  DesignBrief,
+  GanttData,
+  GanttMember,
+  GanttTask,
+  GanttViewMode,
+  ProjectSketch,
+  ProjectStatus,
+} from "@/types/database";
+import { GanttGrid } from "@/components/projects/gantt-grid";
+import {
+  TitlePageForm,
+  type TeamMember,
+  type TitlePageData,
+} from "@/components/projects/title-page-card";
+import { DesignBriefForm, normalizeBrief } from "@/components/projects/design-brief-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -33,8 +49,10 @@ const PRESET_COLORS = [
   "#14b8a6",
 ];
 
-function migrateGanttData(data: GanttData | null): { tasks: GanttTask[]; members: GanttMember[]; totalWeeks: number } {
-  if (!data) return { tasks: defaultTasks(), members: [], totalWeeks: 3 };
+function migrateGanttData(
+  data: GanttData | null,
+): { tasks: GanttTask[]; members: GanttMember[]; totalWeeks: number; startDate: string; viewMode: GanttViewMode } {
+  if (!data) return { tasks: defaultTasks(), members: [], totalWeeks: 3, startDate: "", viewMode: "weeks" };
   const members: GanttMember[] = data.members ?? [];
   const totalWeeks: number = data.totalWeeks ?? 3;
   const tasks: GanttTask[] = (data.tasks ?? []).map((t, i) => {
@@ -49,7 +67,7 @@ function migrateGanttData(data: GanttData | null): { tasks: GanttTask[]; members
       color: PRESET_COLORS[i % PRESET_COLORS.length],
     };
   });
-  return { tasks, members, totalWeeks };
+  return { tasks, members, totalWeeks, startDate: data.startDate ?? "", viewMode: data.viewMode ?? "weeks" };
 }
 
 function defaultTasks(): GanttTask[] {
@@ -64,13 +82,28 @@ type ProjectRow = {
   id: string;
   title: string;
   status: ProjectStatus;
-  initial_sketch_urls: string[] | null;
+  problem_title: string | null;
+  school_name: string | null;
+  course_title: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  design_problem: string | null;
+  team_photo_url: string | null;
+  title_page_updated_at: string | null;
+  design_brief: DesignBrief | null;
+  design_brief_updated_at: string | null;
   matrix_criteria: string[] | null;
   matrix_options: string[] | null;
   matrix_ratings: number[][] | null;
   gantt_data: GanttData | null;
-  final_sketch_urls: string[] | null;
 };
+
+function formatStamp(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString();
+}
 
 function emptyCriteria(): string[] {
   return ["", "", "", ""];
@@ -80,14 +113,43 @@ function defaultMatrixRows(optionCount: number, criteriaCount: number): number[]
   return Array.from({ length: optionCount }, () => Array.from({ length: criteriaCount }, () => 3));
 }
 
-export function ProjectSetupWizard({ project }: { project: ProjectRow }) {
+export function ProjectSetupWizard({
+  project,
+  brainstormingSketches: initialBrainstormingSketches,
+  finalSketches: initialFinalSketches,
+  teamMembers,
+}: {
+  project: ProjectRow;
+  brainstormingSketches: ProjectSketch[];
+  finalSketches: ProjectSketch[];
+  teamMembers: TeamMember[];
+}) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
+  const [titlePage, setTitlePage] = useState<TitlePageData>({
+    problem_title: project.problem_title,
+    school_name: project.school_name,
+    course_title: project.course_title,
+    start_date: project.start_date,
+    end_date: project.end_date,
+    design_problem: project.design_problem,
+    team_photo_url: project.team_photo_url,
+    title_page_updated_at: project.title_page_updated_at,
+  });
+  const [designBrief, setDesignBrief] = useState<DesignBrief>(
+    normalizeBrief(project.design_brief),
+  );
+  const [designBriefSavedAt, setDesignBriefSavedAt] = useState<string | null>(
+    project.design_brief_updated_at,
+  );
+
   const [sketchFiles, setSketchFiles] = useState<File[]>([]);
-  const [sketchUrls, setSketchUrls] = useState<string[]>(project.initial_sketch_urls ?? []);
+  const [brainstormingSketches, setBrainstormingSketches] = useState<ProjectSketch[]>(initialBrainstormingSketches);
+  // Local label edits not yet persisted (keyed by sketch id).
+  const [pendingLabels, setPendingLabels] = useState<Record<string, string>>({});
 
   const initialOptions = project.matrix_options?.length ? project.matrix_options : ["Option A", "Option B", "Option C"];
   const initialCriteria = project.matrix_criteria?.length ? project.matrix_criteria : emptyCriteria();
@@ -109,11 +171,13 @@ export function ProjectSetupWizard({ project }: { project: ProjectRow }) {
   const [tasks, setTasks] = useState<GanttTask[]>(initialGantt.tasks);
   const [members, setMembers] = useState<GanttMember[]>(initialGantt.members);
   const [totalWeeks, setTotalWeeks] = useState(initialGantt.totalWeeks);
+  const [ganttStartDate, setGanttStartDate] = useState<string>(initialGantt.startDate);
+  const [ganttViewMode, setGanttViewMode] = useState<GanttViewMode>(initialGantt.viewMode);
   const [newMemberName, setNewMemberName] = useState("");
   const [newMemberColor, setNewMemberColor] = useState(PRESET_COLORS[0]);
 
   const [finalFiles, setFinalFiles] = useState<File[]>([]);
-  const [finalUrls, setFinalUrls] = useState<string[]>(project.final_sketch_urls ?? []);
+  const [finalSketches, setFinalSketches] = useState<ProjectSketch[]>(initialFinalSketches);
 
   const totals = useMemo(() => optionTotals(ratings), [ratings]);
   const winnerIdx = useMemo(() => winningOptionIndex(totals), [totals]);
@@ -155,21 +219,66 @@ export function ProjectSetupWizard({ project }: { project: ProjectRow }) {
     setPending(true);
     try {
       const supabase = createClient();
-      const uploaded: string[] = [...sketchUrls];
+      const inserted: ProjectSketch[] = [];
       for (const f of sketchFiles) {
-        uploaded.push(await uploadProjectFile(supabase, "sketches", project.id, f));
+        const url = await uploadProjectFile(supabase, "sketches", project.id, f);
+        const res = await addProjectSketch(project.id, "brainstorming", url);
+        if ("error" in res && res.error) {
+          setError(res.error);
+          if (inserted.length > 0) setBrainstormingSketches((prev) => [...prev, ...inserted]);
+          setPending(false);
+          return;
+        }
+        if ("sketch" in res && res.sketch) {
+          inserted.push(res.sketch as ProjectSketch);
+        }
       }
-      const res = await updateProjectSketches(project.id, uploaded);
-      if ("error" in res && res.error) {
-        setError(res.error);
-        setPending(false);
-        return;
+
+      // Persist any label edits the user typed.
+      for (const [id, label] of Object.entries(pendingLabels)) {
+        const original = [...brainstormingSketches, ...inserted].find((s) => s.id === id);
+        if (original && (original.member_label ?? "") !== label.trim()) {
+          const res = await updateProjectSketchLabel(id, label);
+          if ("error" in res && res.error) {
+            setError(res.error);
+            setPending(false);
+            return;
+          }
+        }
       }
-      setSketchUrls(uploaded);
+
+      const merged = [...brainstormingSketches.map((s) => ({
+        ...s,
+        member_label: pendingLabels[s.id] !== undefined ? pendingLabels[s.id].trim() || null : s.member_label,
+      })), ...inserted];
+      setBrainstormingSketches(merged);
+      setPendingLabels({});
       setSketchFiles([]);
-      setStep(1);
+      setStep(3);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed");
+    }
+    setPending(false);
+  }
+
+  function setBrainstormingLabel(id: string, value: string) {
+    setPendingLabels((prev) => ({ ...prev, [id]: value }));
+  }
+
+  async function removeBrainstormingSketch(id: string) {
+    setError(null);
+    setPending(true);
+    const res = await removeProjectSketch(id);
+    if ("error" in res && res.error) {
+      setError(res.error);
+    } else {
+      setBrainstormingSketches((prev) => prev.filter((s) => s.id !== id));
+      setPendingLabels((prev) => {
+        if (!(id in prev)) return prev;
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
     }
     setPending(false);
   }
@@ -187,7 +296,7 @@ export function ProjectSetupWizard({ project }: { project: ProjectRow }) {
       setError(res.error);
       return;
     }
-    setStep(2);
+    setStep(4);
   }
 
   function addMember() {
@@ -237,17 +346,41 @@ export function ProjectSetupWizard({ project }: { project: ProjectRow }) {
     );
   }
 
+  function setTaskDayRange(taskIdx: number, day: number) {
+    setTasks((prev) =>
+      prev.map((task, idx) => {
+        if (idx !== taskIdx) return task;
+        const start = task.startDay;
+        const duration = Math.max(1, task.durationDays);
+        const endExclusive = start + duration;
+        if (day >= start && day < endExclusive) {
+          return task;
+        }
+        if (day < start) {
+          return { ...task, startDay: day, durationDays: endExclusive - day };
+        }
+        return { ...task, startDay: start, durationDays: day - start + 1 };
+      }),
+    );
+  }
+
   async function saveGantt() {
     setError(null);
     setPending(true);
-    const gantt_data: GanttData = { tasks, members, totalWeeks };
+    const gantt_data: GanttData = {
+      tasks,
+      members,
+      totalWeeks,
+      startDate: ganttStartDate || undefined,
+      viewMode: ganttViewMode,
+    };
     const res = await updateProjectGantt(project.id, gantt_data);
     setPending(false);
     if ("error" in res && res.error) {
       setError(res.error);
       return;
     }
-    setStep(3);
+    setStep(5);
   }
 
   async function saveFinalAndFinish() {
@@ -255,17 +388,24 @@ export function ProjectSetupWizard({ project }: { project: ProjectRow }) {
     setPending(true);
     try {
       const supabase = createClient();
-      const uploaded: string[] = [...finalUrls];
+      const inserted: ProjectSketch[] = [];
       for (const f of finalFiles) {
-        uploaded.push(await uploadProjectFile(supabase, "sketches", project.id, f));
+        const url = await uploadProjectFile(supabase, "sketches", project.id, f);
+        const res = await addProjectSketch(project.id, "final", url);
+        if ("error" in res && res.error) {
+          setError(res.error);
+          if (inserted.length > 0) setFinalSketches((prev) => [...prev, ...inserted]);
+          setPending(false);
+          return;
+        }
+        if ("sketch" in res && res.sketch) {
+          inserted.push(res.sketch as ProjectSketch);
+        }
       }
-      const up = await updateFinalSketches(project.id, uploaded);
-      if ("error" in up && up.error) {
-        setError(up.error);
-        setPending(false);
-        return;
+      if (inserted.length > 0) {
+        setFinalSketches((prev) => [...prev, ...inserted]);
       }
-      setFinalUrls(uploaded);
+      setFinalFiles([]);
       const act = await activateProject(project.id);
       if ("error" in act && act.error) {
         setError(act.error);
@@ -280,6 +420,18 @@ export function ProjectSetupWizard({ project }: { project: ProjectRow }) {
     setPending(false);
   }
 
+  async function removeFinalSketch(id: string) {
+    setError(null);
+    setPending(true);
+    const res = await removeProjectSketch(id);
+    if ("error" in res && res.error) {
+      setError(res.error);
+    } else {
+      setFinalSketches((prev) => prev.filter((s) => s.id !== id));
+    }
+    setPending(false);
+  }
+
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div>
@@ -288,13 +440,17 @@ export function ProjectSetupWizard({ project }: { project: ProjectRow }) {
       </div>
 
       <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
-        <span className={step === 0 ? "font-medium text-foreground" : ""}>1 · Sketches</span>
+        <span className={step === 0 ? "font-medium text-foreground" : ""}>1 · Title page</span>
         <span>→</span>
-        <span className={step === 1 ? "font-medium text-foreground" : ""}>2 · Matrix</span>
+        <span className={step === 1 ? "font-medium text-foreground" : ""}>2 · Design brief</span>
         <span>→</span>
-        <span className={step === 2 ? "font-medium text-foreground" : ""}>3 · Gantt</span>
+        <span className={step === 2 ? "font-medium text-foreground" : ""}>3 · Brainstorming</span>
         <span>→</span>
-        <span className={step === 3 ? "font-medium text-foreground" : ""}>4 · Final comparison</span>
+        <span className={step === 3 ? "font-medium text-foreground" : ""}>4 · Matrix</span>
+        <span>→</span>
+        <span className={step === 4 ? "font-medium text-foreground" : ""}>5 · Gantt</span>
+        <span>→</span>
+        <span className={step === 5 ? "font-medium text-foreground" : ""}>6 · Final comparison</span>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
@@ -302,28 +458,154 @@ export function ProjectSetupWizard({ project }: { project: ProjectRow }) {
       {step === 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Initial sketches</CardTitle>
-            <CardDescription>Upload photos of early concepts. You can add more files later from the notebook.</CardDescription>
+            <CardTitle>Title page</CardTitle>
+            <CardDescription>
+              Capture the problem title, school + course, dates, team photo, and design problem. Team-member names come from the project members list.
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <Input type="file" accept="image/*" multiple capture="environment" onChange={(e) => setSketchFiles(Array.from(e.target.files ?? []))} />
-            {sketchUrls.length > 0 && (
-              <ul className="list-inside list-disc text-sm text-muted-foreground">
-                {sketchUrls.map((u) => (
-                  <li key={u} className="truncate">
-                    {u}
-                  </li>
-                ))}
-              </ul>
+          <CardContent>
+            <TitlePageForm
+              projectId={project.id}
+              initial={titlePage}
+              onSavedAction={(saved) => setTitlePage(saved)}
+              actionsSlot={({ save, pending: formPending }) => (
+                <>
+                  <Button
+                    type="button"
+                    onClick={async () => {
+                      const ok = await save();
+                      if (ok) setStep(1);
+                    }}
+                    disabled={formPending}
+                  >
+                    {formPending ? "Saving…" : "Continue"}
+                  </Button>
+                  {titlePage.title_page_updated_at && (
+                    <p className="text-xs text-muted-foreground">Saved {formatStamp(titlePage.title_page_updated_at)}</p>
+                  )}
+                </>
+              )}
+            />
+            {teamMembers.length > 0 && (
+              <p className="mt-3 text-xs text-muted-foreground">
+                Team members on this notebook:{" "}
+                {teamMembers.map((m) => (m.full_name ?? "").trim()).filter((n) => n.length > 0).join(", ") || "—"}
+              </p>
             )}
-            <Button onClick={saveSketches} disabled={pending}>
-              {pending ? "Saving…" : "Continue"}
-            </Button>
           </CardContent>
         </Card>
       )}
 
       {step === 1 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Design brief</CardTitle>
+            <CardDescription>
+              Specify the brief. The &quot;Problem&quot; Or Need row mirrors the design problem from the title page.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DesignBriefForm
+              projectId={project.id}
+              initial={designBrief}
+              designProblem={titlePage.design_problem}
+              onSavedAction={(saved, updatedAt) => {
+                setDesignBrief(saved);
+                setDesignBriefSavedAt(updatedAt);
+              }}
+              actionsSlot={({ save, pending: formPending }) => (
+                <>
+                  <Button
+                    type="button"
+                    onClick={async () => {
+                      const ok = await save();
+                      if (ok) setStep(2);
+                    }}
+                    disabled={formPending}
+                  >
+                    {formPending ? "Saving…" : "Continue"}
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={() => setStep(0)} disabled={formPending}>
+                    Back
+                  </Button>
+                  {designBriefSavedAt && (
+                    <p className="text-xs text-muted-foreground">Saved {formatStamp(designBriefSavedAt)}</p>
+                  )}
+                </>
+              )}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {step === 2 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Brainstorming sketches</CardTitle>
+            <CardDescription>Upload photos of early concepts and tag who drew each one. You can add more later from the notebook.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="brainstorm-files">Add sketches</Label>
+              <Input
+                id="brainstorm-files"
+                type="file"
+                accept="image/*"
+                multiple
+                capture="environment"
+                onChange={(e) => setSketchFiles(Array.from(e.target.files ?? []))}
+              />
+            </div>
+            {brainstormingSketches.length > 0 && (
+              <div className="space-y-3">
+                <p className="text-sm font-medium">Saved sketches</p>
+                <ul className="space-y-3">
+                  {brainstormingSketches.map((s, idx) => {
+                    const labelValue = pendingLabels[s.id] ?? s.member_label ?? "";
+                    return (
+                      <li key={s.id} className="flex flex-col gap-2 rounded-md border bg-muted/30 p-3 sm:flex-row sm:items-center">
+                        <div className="text-sm text-muted-foreground sm:w-24">Sketch {idx + 1}</div>
+                        <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center">
+                          <Input
+                            placeholder="Drawn by (e.g. Alice)"
+                            value={labelValue}
+                            onChange={(e) => setBrainstormingLabel(s.id, e.target.value)}
+                            className="sm:max-w-xs"
+                          />
+                          <a
+                            href={s.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="truncate text-xs text-muted-foreground underline-offset-2 hover:underline"
+                          >
+                            {s.url.split("/").pop()}
+                          </a>
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">
+                            Uploaded {formatStamp(s.created_at)}
+                          </span>
+                        </div>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => removeBrainstormingSketch(s.id)} disabled={pending}>
+                          Remove
+                        </Button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-3">
+              <Button onClick={saveSketches} disabled={pending}>
+                {pending ? "Saving…" : "Continue"}
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => setStep(1)} disabled={pending}>
+                Back
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {step === 3 && (
         <Card>
           <CardHeader>
             <CardTitle>Decision matrix</CardTitle>
@@ -408,20 +690,60 @@ export function ProjectSetupWizard({ project }: { project: ProjectRow }) {
                 {totals[winnerIdx]})
               </p>
             )}
-            <Button onClick={saveMatrix} disabled={pending}>
-              {pending ? "Saving…" : "Continue"}
-            </Button>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button onClick={saveMatrix} disabled={pending}>
+                {pending ? "Saving…" : "Continue"}
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => setStep(2)} disabled={pending}>
+                Back
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
 
-      {step === 2 && (
+      {step === 4 && (
         <Card>
           <CardHeader>
             <CardTitle>Gantt chart</CardTitle>
-            <CardDescription>Plan tasks by week. Add students with colors, then click weekly cells to quickly place each task.</CardDescription>
+            <CardDescription>Pick a project start date, then plan tasks. Click a cell to extend a task to that day or week.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
+
+            {/* ── Schedule controls ── */}
+            <div className="flex flex-wrap items-end gap-4">
+              <div className="space-y-1">
+                <Label htmlFor="gantt-start-date">Project start date (Monday)</Label>
+                <Input
+                  id="gantt-start-date"
+                  type="date"
+                  value={ganttStartDate}
+                  onChange={(e) => setGanttStartDate(e.target.value)}
+                  className="w-44"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>View</Label>
+                <div className="inline-flex overflow-hidden rounded-md border">
+                  <button
+                    type="button"
+                    className={cn("px-3 py-1.5 text-sm", ganttViewMode === "weeks" ? "bg-muted font-medium" : "hover:bg-muted/50")}
+                    onClick={() => setGanttViewMode("weeks")}
+                  >
+                    Weeks
+                  </button>
+                  <button
+                    type="button"
+                    className={cn("border-l px-3 py-1.5 text-sm", ganttViewMode === "days" ? "bg-muted font-medium" : "hover:bg-muted/50")}
+                    onClick={() => setGanttViewMode("days")}
+                  >
+                    Days
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <Separator />
 
             {/* ── Team members ── */}
             <div className="space-y-3">
@@ -583,87 +905,37 @@ export function ProjectSetupWizard({ project }: { project: ProjectRow }) {
             {/* ── Visual Gantt grid ── */}
             <div className="space-y-2">
               <div className="flex items-center gap-3">
-                <p className="text-sm font-medium">Weekly planning grid</p>
+                <p className="text-sm font-medium">{ganttViewMode === "days" ? "Daily planning grid" : "Weekly planning grid"}</p>
                 <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                   <button type="button" className="rounded border px-1.5 py-0.5 hover:bg-muted" onClick={() => setTotalWeeks((w) => Math.max(1, w - 1))}>−</button>
                   <span>{totalWeeks} {totalWeeks === 1 ? "week" : "weeks"}</span>
                   <button type="button" className="rounded border px-1.5 py-0.5 hover:bg-muted" onClick={() => setTotalWeeks((w) => Math.min(12, w + 1))}>+</button>
                 </div>
               </div>
-              <div className="overflow-x-auto rounded border">
-                <table className="border-collapse text-xs">
-                  <thead>
-                    <tr className="bg-muted/60">
-                      <th className="w-36 border-b border-r px-2 py-1 text-left font-medium text-muted-foreground">Task</th>
-                      {members.length > 0 && (
-                        <th className="border-b border-r px-2 py-1 text-left font-medium text-muted-foreground whitespace-nowrap">Members</th>
-                      )}
-                      {Array.from({ length: totalWeeks }, (_, w) => (
-                        <th key={w} className="border-b border-l px-2 py-1 text-center font-medium">
-                          Week {w + 1}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tasks.length === 0 && (
-                      <tr>
-                        <td colSpan={99} className="px-3 py-4 text-center text-muted-foreground">No tasks yet</td>
-                      </tr>
-                    )}
-                    {tasks.map((t, taskIdx) => {
-                      const taskMembers = members.filter((m) => t.memberIds.includes(m.id));
-                      return (
-                        <tr key={t.id} className="border-b last:border-0">
-                          <td className="border-r px-2 py-1 font-medium" style={{ borderLeftColor: t.color, borderLeftWidth: 3 }}>
-                            {t.name || "—"}
-                          </td>
-                          {members.length > 0 && (
-                            <td className="border-r px-2 py-1 text-muted-foreground whitespace-nowrap">
-                              {taskMembers.length > 0
-                                ? taskMembers.map((m) => m.name).join(", ")
-                                : <span className="italic opacity-50">—</span>}
-                            </td>
-                          )}
-                          {Array.from({ length: totalWeeks }, (_, w) => {
-                            const taskStartWeek = Math.floor(t.startDay / 5);
-                            const taskWeeks = Math.max(1, Math.ceil(t.durationDays / 5));
-                            const active = w >= taskStartWeek && w < taskStartWeek + taskWeeks;
-                            const displayColor = taskMembers[0]?.color ?? t.color;
-                            return (
-                              <td
-                                key={w}
-                                className={cn(
-                                  "h-8 w-20 border-l cursor-pointer transition-colors",
-                                  active ? "" : "bg-background",
-                                )}
-                                style={
-                                  active
-                                    ? {
-                                        backgroundColor: displayColor + "cc",
-                                      }
-                                    : undefined
-                                }
-                                onClick={() => setTaskWeekRange(taskIdx, w)}
-                              />
-                            );
-                          })}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <GanttGrid
+                tasks={tasks}
+                members={members}
+                totalWeeks={totalWeeks}
+                startDate={ganttStartDate || undefined}
+                viewMode={ganttViewMode}
+                onWeekCellClick={ganttViewMode === "weeks" ? setTaskWeekRange : undefined}
+                onDayCellClick={ganttViewMode === "days" ? setTaskDayRange : undefined}
+              />
             </div>
 
-            <Button onClick={saveGantt} disabled={pending}>
-              {pending ? "Saving…" : "Continue"}
-            </Button>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button onClick={saveGantt} disabled={pending}>
+                {pending ? "Saving…" : "Continue"}
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => setStep(3)} disabled={pending}>
+                Back
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
 
-      {step === 3 && (
+      {step === 5 && (
         <Card>
           <CardHeader>
             <CardTitle>Final design comparison</CardTitle>
@@ -671,18 +943,29 @@ export function ProjectSetupWizard({ project }: { project: ProjectRow }) {
           </CardHeader>
           <CardContent className="space-y-4">
             <Input type="file" accept="image/*" multiple capture="environment" onChange={(e) => setFinalFiles(Array.from(e.target.files ?? []))} />
-            {finalUrls.length > 0 && (
-              <ul className="list-inside list-disc text-sm text-muted-foreground">
-                {finalUrls.map((u) => (
-                  <li key={u} className="truncate">
-                    {u}
+            {finalSketches.length > 0 && (
+              <ul className="space-y-2 text-sm">
+                {finalSketches.map((s) => (
+                  <li key={s.id} className="flex items-center justify-between gap-3 rounded border bg-muted/30 p-2">
+                    <a href={s.url} target="_blank" rel="noreferrer" className="truncate underline-offset-2 hover:underline">
+                      {s.url.split("/").pop()}
+                    </a>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">Uploaded {formatStamp(s.created_at)}</span>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => removeFinalSketch(s.id)} disabled={pending}>
+                      Remove
+                    </Button>
                   </li>
                 ))}
               </ul>
             )}
-            <Button onClick={saveFinalAndFinish} disabled={pending}>
-              {pending ? "Finishing…" : "Finish setup"}
-            </Button>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button onClick={saveFinalAndFinish} disabled={pending}>
+                {pending ? "Finishing…" : "Finish setup"}
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => setStep(4)} disabled={pending}>
+                Back
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}

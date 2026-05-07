@@ -4,12 +4,31 @@ import { notFound, redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import { optionTotals, sortOptionIndexesByTotal, winningOptionIndex } from "@/lib/matrix";
+import { DeleteProjectButton } from "@/components/projects/delete-project-button";
+import { DesignBriefCard } from "@/components/projects/design-brief-card";
+import { GanttGridFromData } from "@/components/projects/gantt-grid";
+import { InitialDesignSketchSection } from "@/components/projects/initial-design-sketch-section";
 import { ProjectInvitePanel } from "@/components/projects/project-invite-panel";
+import { TitlePageCard } from "@/components/projects/title-page-card";
 import { TeacherCommentsPanel } from "@/components/teacher/teacher-comments-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import type { GanttData } from "@/types/database";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import type {
+  ConclusionAnswer,
+  ConclusionQuestion,
+  DesignBrief,
+  GanttData,
+  ProjectSketch,
+} from "@/types/database";
+
+function formatStamp(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString();
+}
 
 type Props = { params: Promise<{ projectId: string }> };
 type InviteRow = { id: string; invitee_email: string; status: "pending" | "accepted" | "revoked"; created_at: string };
@@ -27,7 +46,7 @@ export default async function ProjectOverviewPage({ params }: Props) {
   const { data: project, error } = await supabase
     .from("projects")
     .select(
-      "id, title, status, team_photo_url, initial_sketch_urls, matrix_criteria, matrix_options, matrix_ratings, gantt_data, technical_latex, final_sketch_urls, classroom_id, classrooms(teacher_id)"
+      "id, title, status, team_photo_url, problem_title, school_name, course_title, start_date, end_date, design_problem, title_page_updated_at, design_brief, design_brief_updated_at, matrix_criteria, matrix_options, matrix_ratings, matrix_updated_at, gantt_data, gantt_updated_at, classroom_id, created_by, classrooms(teacher_id)"
     )
     .eq("id", projectId)
     .single();
@@ -71,15 +90,43 @@ export default async function ProjectOverviewPage({ params }: Props) {
     .eq("project_id", projectId)
     .eq("user_id", user.id)
     .maybeSingle();
-  const canInviteStudents = profile?.role === "student" && !!memberRow;
+  const isProjectMember = profile?.role === "student" && !!memberRow;
 
   const matrix = (project.matrix_ratings as number[][] | null) ?? [];
   const options: string[] = (project.matrix_options as string[] | null) ?? [];
+  const criteria: string[] = (project.matrix_criteria as string[] | null) ?? [];
   const totals = matrix.length && options.length ? optionTotals(matrix) : [];
   const winnerIdx = totals.length ? winningOptionIndex(totals) : -1;
   const rankedIndexes = sortOptionIndexesByTotal(totals);
 
   const gantt = project.gantt_data as GanttData | null;
+  const matrixUpdatedAt = project.matrix_updated_at as string | null;
+  const ganttUpdatedAt = project.gantt_updated_at as string | null;
+
+  const { data: sketchRows } = await supabase
+    .from("project_sketches")
+    .select("id, project_id, kind, url, member_label, uploaded_by, position, created_at, updated_at")
+    .eq("project_id", projectId)
+    .in("kind", ["brainstorming", "initial_design"])
+    .order("position", { ascending: true });
+  const allSketches = (sketchRows as ProjectSketch[] | null) ?? [];
+  const brainstormSketches = allSketches.filter((s) => s.kind === "brainstorming");
+  const initialDesignSketches = allSketches.filter((s) => s.kind === "initial_design");
+
+  const { data: conclusionQuestions } = project.classroom_id
+    ? await supabase
+        .from("classroom_conclusion_questions")
+        .select("id, classroom_id, prompt, position, created_at, updated_at")
+        .eq("classroom_id", project.classroom_id)
+        .order("position", { ascending: true })
+    : { data: [] as ConclusionQuestion[] };
+  const { data: conclusionAnswers } = await supabase
+    .from("project_conclusion_answers")
+    .select("id, project_id, question_id, body, answered_by, created_at, updated_at")
+    .eq("project_id", projectId);
+  const answersByQuestion: Record<string, ConclusionAnswer> = Object.fromEntries(
+    ((conclusionAnswers as ConclusionAnswer[] | null) ?? []).map((a) => [a.question_id, a]),
+  );
 
   const { data: comments } = await supabase
     .from("project_comments")
@@ -87,6 +134,26 @@ export default async function ProjectOverviewPage({ params }: Props) {
     .eq("project_id", projectId)
     .eq("anchor_section", "overview")
     .order("created_at", { ascending: false });
+
+  const teacherIds = Array.from(new Set((comments ?? []).map((c) => c.teacher_id).filter(Boolean)));
+  const { data: teacherProfiles } = teacherIds.length
+    ? await supabase.from("profiles").select("id, full_name").in("id", teacherIds)
+    : { data: [] as { id: string; full_name: string | null }[] };
+  const teacherNamesById: Record<string, string> = Object.fromEntries(
+    (teacherProfiles ?? []).map((p) => [p.id, (p.full_name ?? "").trim() || "Teacher"]),
+  );
+
+  const isCreator = !!project.created_by && project.created_by === user.id;
+
+  const { data: memberRows } = await supabase
+    .from("project_members")
+    .select("user_id")
+    .eq("project_id", projectId);
+  const memberIds = (memberRows ?? []).map((r) => r.user_id as string);
+  const { data: memberProfiles } = memberIds.length
+    ? await supabase.from("profiles").select("id, full_name").in("id", memberIds)
+    : { data: [] as { id: string; full_name: string | null }[] };
+  const teamMembers = (memberProfiles ?? []).map((p) => ({ id: p.id, full_name: p.full_name ?? null }));
 
   const { data: invites } = await supabase
     .from("project_invites")
@@ -96,103 +163,217 @@ export default async function ProjectOverviewPage({ params }: Props) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <Badge variant="secondary">Status: {project.status}</Badge>
+        {isCreator && (
+          <DeleteProjectButton
+            projectId={projectId}
+            projectTitle={project.title}
+            classroomId={project.classroom_id ?? null}
+          />
+        )}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Title page</CardTitle>
-            <CardDescription>Team identity</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {project.team_photo_url ? (
-              <div className="relative aspect-video w-full overflow-hidden rounded-md border bg-muted">
-                <Image src={project.team_photo_url} alt="Team" fill className="object-cover" sizes="(max-width:768px) 100vw, 50vw" />
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">No team photo uploaded.</p>
-            )}
-          </CardContent>
-        </Card>
+      <TitlePageCard
+        projectId={projectId}
+        teamMembers={teamMembers}
+        canEdit={isProjectMember}
+        initial={{
+          problem_title: (project.problem_title as string | null) ?? null,
+          school_name: (project.school_name as string | null) ?? null,
+          course_title: (project.course_title as string | null) ?? null,
+          start_date: (project.start_date as string | null) ?? null,
+          end_date: (project.end_date as string | null) ?? null,
+          design_problem: (project.design_problem as string | null) ?? null,
+          team_photo_url: (project.team_photo_url as string | null) ?? null,
+          title_page_updated_at: (project.title_page_updated_at as string | null) ?? null,
+        }}
+      />
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Decision matrix</CardTitle>
-            <CardDescription>Scores from 1 to 5 per category · highest total leads</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            {options.length === 0 ? (
-              <p className="text-muted-foreground">Matrix not filled in.</p>
-            ) : (
-              <>
-                <p>
-                  Leading option:{" "}
-                  <span className="font-medium">
-                    {winnerIdx >= 0 ? options[winnerIdx] : "—"} {winnerIdx >= 0 && `(total ${totals[winnerIdx]})`}
-                  </span>
-                </p>
-                <ul className="list-inside list-disc text-muted-foreground">
-                  {rankedIndexes.map((i) => (
-                    <li key={options[i] ?? i}>
-                      {options[i]}: total {totals[i] ?? "—"}
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      <DesignBriefCard
+        projectId={projectId}
+        canEdit={isProjectMember}
+        designProblem={(project.design_problem as string | null) ?? null}
+        initial={(project.design_brief as DesignBrief | null) ?? null}
+        initialUpdatedAt={(project.design_brief_updated_at as string | null) ?? null}
+      />
 
       <Card>
         <CardHeader>
-          <CardTitle>Gantt snapshot</CardTitle>
+          <CardTitle>Decision matrix summary</CardTitle>
+          <CardDescription>Highest total leads</CardDescription>
         </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
-          {!gantt?.tasks?.length ? (
-            <p>No tasks recorded.</p>
+        <CardContent className="space-y-2 text-sm">
+          {options.length === 0 ? (
+            <p className="text-muted-foreground">Matrix not filled in.</p>
           ) : (
-            <ul className="space-y-1">
-              {gantt.tasks.map((t) => (
-                <li key={t.id} className="flex items-center gap-2">
-                  <span className="inline-block size-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: t.color ?? "#6b7280" }} />
-                  <span className="font-medium text-foreground">{t.name}</span>
-                  {" — "}week {Math.floor((t.startDay ?? 0) / 5) + 1}, {Math.max(1, Math.ceil((t.durationDays ?? 1) / 5))} week(s)
-                  {gantt.members && t.memberIds?.length > 0 && (
-                    <span className="text-xs">
-                      ({gantt.members.filter((m) => t.memberIds.includes(m.id)).map((m) => m.name).join(", ")})
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
+            <>
+              <p>
+                Leading option:{" "}
+                <span className="font-medium">
+                  {winnerIdx >= 0 ? options[winnerIdx] : "—"} {winnerIdx >= 0 && `(total ${totals[winnerIdx]})`}
+                </span>
+              </p>
+              <ul className="list-inside list-disc text-muted-foreground">
+                {rankedIndexes.map((i) => (
+                  <li key={options[i] ?? i}>
+                    {options[i]}: total {totals[i] ?? "—"}
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Initial sketches</CardTitle>
+          <CardTitle>Brainstorming sketches</CardTitle>
+          <CardDescription>Early concepts from the team.</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-3">
-          {(project.initial_sketch_urls ?? []).length === 0 ? (
+        <CardContent>
+          {brainstormSketches.length === 0 ? (
             <p className="text-sm text-muted-foreground">No sketches on file.</p>
           ) : (
-            ((project.initial_sketch_urls as string[] | null) ?? []).map((url: string) => (
-              <div key={url} className="relative aspect-video overflow-hidden rounded-md border bg-muted">
-                <Image src={url} alt="Sketch" fill className="object-cover" sizes="200px" />
-              </div>
-            ))
+            <div className="grid gap-3 sm:grid-cols-3">
+              {brainstormSketches.map((s) => (
+                <div key={s.id} className="space-y-1">
+                  <div className="relative aspect-video overflow-hidden rounded-md border bg-muted">
+                    <Image src={s.url} alt="Brainstorming sketch" fill className="object-cover" sizes="200px" />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {s.member_label ? (
+                      <>
+                        Drawn by <span className="font-medium text-foreground">{s.member_label}</span>
+                      </>
+                    ) : (
+                      <span className="italic">Unlabeled</span>
+                    )}
+                    {" · Uploaded "}
+                    {formatStamp(s.created_at)}
+                  </p>
+                </div>
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>
 
-      <ProjectInvitePanel projectId={projectId} canInvite={!!canInviteStudents} invites={(invites as InviteRow[]) ?? []} />
+      <Card>
+        <CardHeader>
+          <CardTitle>Decision matrix</CardTitle>
+          <CardDescription>
+            Each option scored across the team&apos;s criteria.
+            {matrixUpdatedAt && <> · Last updated {formatStamp(matrixUpdatedAt)}</>}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {options.length === 0 || criteria.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Matrix not filled in.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Option</TableHead>
+                    {criteria.map((c, i) => (
+                      <TableHead key={i} className="min-w-[4.5rem] text-center">
+                        {c || `C${i + 1}`}
+                      </TableHead>
+                    ))}
+                    <TableHead className="text-right">Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {options.map((opt, row) => (
+                    <TableRow key={row} className={row === winnerIdx ? "bg-muted/60" : undefined}>
+                      <TableCell className="font-medium">{opt || `Option ${row + 1}`}</TableCell>
+                      {criteria.map((_, col) => (
+                        <TableCell key={col} className="text-center">
+                          {matrix[row]?.[col] ?? "—"}
+                        </TableCell>
+                      ))}
+                      <TableCell className="text-right font-mono">
+                        {totals[row] ?? "—"}
+                        {row === winnerIdx && <span className="ml-2 text-xs text-muted-foreground">leader</span>}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <InitialDesignSketchSection projectId={projectId} initialSketches={initialDesignSketches} canEdit={isProjectMember} />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Gantt chart</CardTitle>
+          <CardDescription>
+            {gantt?.startDate ? `Starts ${gantt.startDate}` : "No start date set"} · view: {gantt?.viewMode ?? "weeks"}
+            {ganttUpdatedAt && <> · Last updated {formatStamp(ganttUpdatedAt)}</>}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!gantt?.tasks?.length ? (
+            <p className="text-sm text-muted-foreground">No tasks recorded.</p>
+          ) : (
+            <GanttGridFromData data={gantt} />
+          )}
+        </CardContent>
+      </Card>
+
+      {(conclusionQuestions ?? []).length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Conclusion</CardTitle>
+            <CardDescription>
+              Final reflections from the team.{" "}
+              <Link href={`/projects/${projectId}/conclusion`} className="underline-offset-2 hover:underline">
+                Open conclusion
+              </Link>
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-3 text-sm">
+              {(conclusionQuestions as ConclusionQuestion[]).map((q, idx) => {
+                const answer = answersByQuestion[q.id];
+                const snippet = (answer?.body ?? "").trim();
+                const truncated = snippet.length > 240 ? `${snippet.slice(0, 240)}…` : snippet;
+                return (
+                  <li key={q.id} className="space-y-1 rounded-md border bg-muted/30 p-3">
+                    <p className="font-medium">
+                      <span className="text-muted-foreground">{idx + 1}.</span> {q.prompt}
+                    </p>
+                    {snippet ? (
+                      <p className="whitespace-pre-wrap text-muted-foreground">{truncated}</p>
+                    ) : (
+                      <p className="italic text-muted-foreground">No answer yet.</p>
+                    )}
+                    {answer?.updated_at && (
+                      <p className="text-xs text-muted-foreground">
+                        Last updated {formatStamp(answer.updated_at)}
+                      </p>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      <ProjectInvitePanel projectId={projectId} canInvite={isProjectMember} invites={(invites as InviteRow[]) ?? []} />
 
       {(isClassTeacher || (comments?.length ?? 0) > 0) && (
-        <TeacherCommentsPanel projectId={projectId} isTeacher={!!isClassTeacher} initialComments={comments ?? []} />
+        <TeacherCommentsPanel
+          projectId={projectId}
+          isTeacher={!!isClassTeacher}
+          initialComments={comments ?? []}
+          teacherNamesById={teacherNamesById}
+        />
       )}
     </div>
   );

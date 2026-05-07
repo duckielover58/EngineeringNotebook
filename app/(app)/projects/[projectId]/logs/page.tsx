@@ -40,5 +40,21 @@ export default async function ProjectLogsPage({ params }: Props) {
     return acc;
   }, {});
 
-  return <DailyLogSection projectId={projectId} initialLogs={logs ?? []} isTeacherView={profile?.role === "teacher"} commentsByLogId={commentsByLogId} />;
+  const teacherIds = Array.from(new Set((logComments ?? []).map((c) => c.teacher_id).filter(Boolean)));
+  const { data: teacherProfiles } = teacherIds.length
+    ? await supabase.from("profiles").select("id, full_name").in("id", teacherIds)
+    : { data: [] as { id: string; full_name: string | null }[] };
+  const teacherNamesById: Record<string, string> = Object.fromEntries(
+    (teacherProfiles ?? []).map((p) => [p.id, (p.full_name ?? "").trim() || "Teacher"]),
+  );
+
+  return (
+    <DailyLogSection
+      projectId={projectId}
+      initialLogs={logs ?? []}
+      isTeacherView={profile?.role === "teacher"}
+      commentsByLogId={commentsByLogId}
+      teacherNamesById={teacherNamesById}
+    />
+  );
 }

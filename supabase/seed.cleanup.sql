@@ -6,5 +6,7 @@ where email in (
   'student3@devtest.engilog.local',
   'student4@devtest.engilog.local',
   'student5@devtest.engilog.local',
-  'teacher1@devtest.engilog.local'
+  'teacher1@devtest.engilog.local',
+  'teacher2@devtest.engilog.local',
+  'teacher3@devtest.engilog.local'
 );

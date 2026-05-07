@@ -3,9 +3,12 @@ import { notFound, redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import { CoTeacherManager } from "@/components/classrooms/co-teacher-manager";
+import { ConclusionQuestionsEditor } from "@/components/classrooms/conclusion-questions-editor";
+import { DeleteClassroomButton } from "@/components/classrooms/delete-classroom-button";
 import { PendingProjectInvites } from "@/components/classrooms/pending-project-invites";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import type { ConclusionQuestion } from "@/types/database";
 
 type Props = { params: Promise<{ classroomId: string }> };
 type TeacherRow = { teacher_id: string; profiles: { full_name: string } | { full_name: string }[] | null };
@@ -66,6 +69,14 @@ export default async function ClassroomDetailPage({ params }: Props) {
         .order("created_at", { ascending: true })
     : { data: [] as never[] };
 
+  const { data: conclusionQuestions } = isTeacher
+    ? await supabase
+        .from("classroom_conclusion_questions")
+        .select("id, classroom_id, prompt, position, created_at, updated_at")
+        .eq("classroom_id", classroomId)
+        .order("position", { ascending: true })
+    : { data: [] as never[] };
+
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -77,7 +88,7 @@ export default async function ClassroomDetailPage({ params }: Props) {
             </p>
           )}
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-start gap-2">
           {isTeacher && (
             <Button variant="secondary" asChild>
               <Link href={`/teacher/classrooms/${room.id}`}>Teacher dashboard</Link>
@@ -87,6 +98,9 @@ export default async function ClassroomDetailPage({ params }: Props) {
             <Button asChild>
               <Link href={`/classrooms/${room.id}/projects/new`}>New notebook</Link>
             </Button>
+          )}
+          {room.teacher_id === user.id && (
+            <DeleteClassroomButton classroomId={room.id} classroomName={room.name} />
           )}
         </div>
       </div>
@@ -99,6 +113,13 @@ export default async function ClassroomDetailPage({ params }: Props) {
           ownerId={room.teacher_id}
           currentUserId={user.id}
           rows={(teacherRows as TeacherRow[]) ?? []}
+        />
+      )}
+
+      {isTeacher && (
+        <ConclusionQuestionsEditor
+          classroomId={classroomId}
+          initialQuestions={(conclusionQuestions as ConclusionQuestion[] | null) ?? []}
         />
       )}
 

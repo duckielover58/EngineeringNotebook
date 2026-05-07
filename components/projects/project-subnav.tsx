@@ -10,7 +10,8 @@ const links = (projectId: string, status: ProjectStatus) => {
   const base = [
     { href: `/projects/${projectId}`, label: "Overview" },
     { href: `/projects/${projectId}/logs`, label: "Daily log" },
-    { href: `/projects/${projectId}/technicals`, label: "Technicals" },
+    { href: `/projects/${projectId}/math`, label: "Math" },
+    { href: `/projects/${projectId}/conclusion`, label: "Conclusion" },
     { href: `/projects/${projectId}/final`, label: "Final sketches" },
     { href: `/projects/${projectId}/export`, label: "Export PDF" },
   ];

@@ -85,6 +85,73 @@ export async function addCoTeacherByEmail(classroomId: string, email: string) {
   return { ok: true as const };
 }
 
+type ConclusionQuestionInput = { id?: string; prompt: string };
+
+export async function setClassroomConclusionQuestions(
+  classroomId: string,
+  questions: ConclusionQuestionInput[],
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be signed in." };
+
+  // Pre-check teacher membership for a clearer error than RLS rejection.
+  const { data: membership } = await supabase
+    .from("classroom_teachers")
+    .select("teacher_id")
+    .eq("classroom_id", classroomId)
+    .eq("teacher_id", user.id)
+    .maybeSingle();
+  if (!membership) {
+    return { error: "Only classroom teachers can edit conclusion questions." };
+  }
+
+  const cleaned = questions
+    .map((q, i) => ({ id: q.id ?? null, prompt: q.prompt.trim(), position: i }))
+    .filter((q) => q.prompt.length > 0);
+
+  // Atomic delete/update/insert via RPC to avoid partial-save corruption.
+  const { error } = await supabase.rpc("set_classroom_conclusion_questions", {
+    p_classroom: classroomId,
+    p_questions: cleaned,
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath(`/classrooms/${classroomId}`);
+  revalidatePath(`/teacher/classrooms/${classroomId}`);
+  return { ok: true as const };
+}
+
+export async function deleteClassroom(classroomId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be signed in." };
+
+  // Only the original creator (classrooms.teacher_id) can delete.
+  // RLS classrooms_delete_teacher will also enforce this; we pre-check for a clearer error.
+  const { data: room, error: readErr } = await supabase
+    .from("classrooms")
+    .select("teacher_id")
+    .eq("id", classroomId)
+    .single();
+  if (readErr || !room) return { error: "Classroom not found." };
+  if (room.teacher_id !== user.id) {
+    return { error: "Only the classroom creator can delete this classroom." };
+  }
+
+  const { error } = await supabase.from("classrooms").delete().eq("id", classroomId);
+  if (error) return { error: error.message };
+  revalidatePath("/classrooms");
+  revalidatePath(`/classrooms/${classroomId}`);
+  revalidatePath(`/teacher/classrooms/${classroomId}`);
+  revalidatePath("/dashboard");
+  return { ok: true as const };
+}
+
 export async function removeCoTeacher(classroomId: string, teacherId: string) {
   const supabase = await createClient();
   const {

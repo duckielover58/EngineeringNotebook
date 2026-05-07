@@ -26,7 +26,9 @@ BEGIN
       ('Student3', 'student'),
       ('Student4', 'student'),
       ('Student5', 'student'),
-      ('Teacher1', 'teacher')
+      ('Teacher1', 'teacher'),
+      ('Teacher2', 'teacher'),
+      ('Teacher3', 'teacher')
   LOOP
     base_email := lower(base_name) || '@devtest.engilog.local';
 

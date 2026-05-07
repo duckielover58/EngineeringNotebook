@@ -1,12 +1,12 @@
 import { notFound, redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
-import { FinalSketchesForm } from "@/components/projects/final-sketches-form";
-import type { ProjectSketch } from "@/types/database";
+import { MathSectionForm } from "@/components/math/math-section-form";
+import type { ProjectMathImage } from "@/types/database";
 
 type Props = { params: Promise<{ projectId: string }> };
 
-export default async function ProjectFinalPage({ params }: Props) {
+export default async function ProjectMathPage({ params }: Props) {
   const { projectId } = await params;
   const supabase = await createClient();
   const {
@@ -14,16 +14,19 @@ export default async function ProjectFinalPage({ params }: Props) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: project, error } = await supabase.from("projects").select("status").eq("id", projectId).single();
+  const { data: project, error } = await supabase
+    .from("projects")
+    .select("status, math_notes, math_notes_updated_at")
+    .eq("id", projectId)
+    .single();
   if (error || !project) notFound();
   if (project.status === "setup") redirect(`/projects/${projectId}/setup`);
 
-  const { data: sketches } = await supabase
-    .from("project_sketches")
-    .select("id, project_id, kind, url, member_label, uploaded_by, position, created_at, updated_at")
+  const { data: images } = await supabase
+    .from("project_math_images")
+    .select("id, project_id, url, uploaded_by, created_at, updated_at")
     .eq("project_id", projectId)
-    .eq("kind", "final")
-    .order("position", { ascending: true });
+    .order("created_at", { ascending: true });
 
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
   const { data: memberRow } = await supabase
@@ -35,9 +38,11 @@ export default async function ProjectFinalPage({ params }: Props) {
   const canEdit = profile?.role === "student" && !!memberRow;
 
   return (
-    <FinalSketchesForm
+    <MathSectionForm
       projectId={projectId}
-      initialSketches={(sketches as ProjectSketch[] | null) ?? []}
+      initialNotes={(project.math_notes as string | null) ?? null}
+      notesUpdatedAt={(project.math_notes_updated_at as string | null) ?? null}
+      initialImages={(images as ProjectMathImage[] | null) ?? []}
       canEdit={canEdit}
     />
   );
