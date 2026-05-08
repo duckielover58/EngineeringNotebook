@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
+import { SiteCredit } from "@/components/site-credit";
+
 import "./globals.css";
 
 const geistSans = Geist({
@@ -25,7 +27,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} min-h-dvh font-sans antialiased`}>{children}</body>
+      <body className={`${geistSans.variable} ${geistMono.variable} min-h-dvh font-sans antialiased`}>
+        {children}
+        <SiteCredit />
+      </body>
     </html>
   );
 }
