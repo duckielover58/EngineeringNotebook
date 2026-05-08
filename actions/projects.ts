@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/admin";
+import { deleteProjectStorage } from "@/lib/storage-cleanup";
 import type { DesignBrief, GanttData, SketchKind } from "@/types/database";
 
 function validateMatrixRatings(matrix: number[][] | null, optionCount: number, criteriaCount: number) {
@@ -444,6 +446,20 @@ export async function deleteProject(projectId: string) {
   if (readErr || !row) return { error: "Notebook not found." };
   if (row.created_by !== user.id) {
     return { error: "Only the notebook creator can delete it." };
+  }
+
+  const admin = createServiceClient();
+  if (!admin) {
+    return {
+      error:
+        "Server is not configured with SUPABASE_SERVICE_ROLE_KEY, so uploaded files cannot be removed. Add it in .env.local (Supabase → Project Settings → API → service_role secret), then try again.",
+    };
+  }
+  try {
+    await deleteProjectStorage(admin, projectId);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Could not remove notebook files from storage.";
+    return { error: msg };
   }
 
   const { error } = await supabase.from("projects").delete().eq("id", projectId);

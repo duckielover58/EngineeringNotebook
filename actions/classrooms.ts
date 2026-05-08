@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 
 import { syncProfileRoleFromAuth } from "@/actions/profile";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/admin";
+import { deleteProjectStorage } from "@/lib/storage-cleanup";
 import { randomSixDigitCode } from "@/lib/join-code";
 
 export async function createClassroom(formData: FormData) {
@@ -141,6 +143,28 @@ export async function deleteClassroom(classroomId: string) {
   if (readErr || !room) return { error: "Classroom not found." };
   if (room.teacher_id !== user.id) {
     return { error: "Only the classroom creator can delete this classroom." };
+  }
+
+  const { data: projectRows, error: projectsReadErr } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("classroom_id", classroomId);
+  if (projectsReadErr) return { error: projectsReadErr.message };
+
+  const admin = createServiceClient();
+  if (!admin) {
+    return {
+      error:
+        "Server is not configured with SUPABASE_SERVICE_ROLE_KEY, so uploaded notebook files cannot be removed. Add it in .env.local (Supabase → Project Settings → API → service_role secret), then try again.",
+    };
+  }
+  try {
+    for (const row of projectRows ?? []) {
+      await deleteProjectStorage(admin, row.id as string);
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Could not remove notebook files from storage.";
+    return { error: msg };
   }
 
   const { error } = await supabase.from("classrooms").delete().eq("id", classroomId);

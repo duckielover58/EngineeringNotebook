@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "clear:storage": "node scripts/clear-storage-buckets.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
