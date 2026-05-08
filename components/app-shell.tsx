@@ -35,7 +35,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
   const sidebar = (
     <div className="flex h-full flex-col gap-1 p-4">
       <Link href="/dashboard" className="mb-4 flex items-center gap-2 px-2 font-semibold tracking-tight">
-        <EngiLogLogo size={28} className="size-7 shrink-0 rounded-md" />
+        <EngiLogLogo size={28} className="size-7 shrink-0 object-contain" />
         <span>EngiLog</span>
       </Link>
       <Separator className="mb-2" />
@@ -69,7 +69,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="flex h-14 items-center justify-between border-b px-4 md:hidden">
             <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
-              <EngiLogLogo size={24} className="size-6 shrink-0 rounded-md" />
+              <EngiLogLogo size={24} className="size-6 shrink-0 object-contain" />
               EngiLog
             </Link>
             <Sheet>
