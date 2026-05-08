@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BookOpen, GraduationCap, LayoutDashboard, Menu, Plus } from "lucide-react";
 
+import { EngiLogLogo } from "@/components/engilog-logo";
 import { syncProfileRoleFromAuth } from "@/actions/profile";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
@@ -34,8 +35,8 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
   const sidebar = (
     <div className="flex h-full flex-col gap-1 p-4">
       <Link href="/dashboard" className="mb-4 flex items-center gap-2 px-2 font-semibold tracking-tight">
-        <span className="rounded-md bg-primary px-2 py-1 text-xs text-primary-foreground">EL</span>
-        EngiLog
+        <EngiLogLogo size={28} className="size-7 shrink-0 rounded-md" />
+        <span>EngiLog</span>
       </Link>
       <Separator className="mb-2" />
       {nav.map((item) => (
@@ -67,7 +68,8 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         <aside className="hidden w-56 shrink-0 border-r bg-card md:block">{sidebar}</aside>
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="flex h-14 items-center justify-between border-b px-4 md:hidden">
-            <Link href="/dashboard" className="font-semibold">
+            <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
+              <EngiLogLogo size={24} className="size-6 shrink-0 rounded-md" />
               EngiLog
             </Link>
             <Sheet>
