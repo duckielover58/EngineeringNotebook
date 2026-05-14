@@ -31,9 +31,9 @@ export default async function DashboardPage() {
           <CardTitle>Get started</CardTitle>
           <CardDescription>
             {role === "teacher"
-              ? "Create a classroom and share the 6-digit join code with your teams."
+              ? "Create a classroom and share the 6-digit join code with your students."
               : role === "student"
-                ? "Join a classroom with your teacher’s code, then create or open a project notebook."
+                ? "Join a classroom with your teacher’s code, then create or open your notebook."
                 : "We couldn’t load your profile. Open Classrooms after signing in again, or use Sign in below."}
           </CardDescription>
         </CardHeader>

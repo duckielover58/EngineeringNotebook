@@ -31,7 +31,7 @@ export default async function JoinClassroomPage() {
           <CardHeader>
             <CardTitle>Teachers don’t use join codes</CardTitle>
             <CardDescription>
-              Join codes are for students entering your class. Create a classroom to get a code you can share with your teams.
+              Join codes are for students entering your class. Create a classroom to get a code you can share with your students.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">

@@ -51,7 +51,7 @@ export default async function ClassroomsPage() {
             {role === "teacher"
               ? "Manage join codes and open the teacher dashboard."
               : role === "student"
-                ? "Join with a code, then start a notebook for your team."
+                ? "Join with a code, then create your own engineering notebook for each class."
                 : "Sign in again if your profile didn’t load."}
           </p>
         </div>

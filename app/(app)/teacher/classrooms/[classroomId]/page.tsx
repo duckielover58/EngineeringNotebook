@@ -54,16 +54,23 @@ export default async function TeacherClassroomDashboard({ params }: Props) {
 
   const { data: projects } = await supabase
     .from("projects")
-    .select("id, title, status, created_at, daily_logs(created_at)")
+    .select("id, title, status, created_at, created_by, daily_logs(created_at)")
     .eq("classroom_id", classroomId)
     .order("created_at", { ascending: false });
 
-  const projectIds = (projects ?? []).map((p) => p.id);
-  const counts = new Map<string, number>();
-  if (projectIds.length) {
-    const { data: memberRows } = await supabase.from("project_members").select("project_id").in("project_id", projectIds);
-    for (const row of memberRows ?? []) {
-      counts.set(row.project_id, (counts.get(row.project_id) ?? 0) + 1);
+  const creatorIds = Array.from(
+    new Set(
+      (projects ?? [])
+        .map((p) => p.created_by as string | null | undefined)
+        .filter((id): id is string => typeof id === "string" && id.length > 0),
+    ),
+  );
+  const creatorNames = new Map<string, string>();
+  if (creatorIds.length) {
+    const { data: creatorProfiles } = await supabase.from("profiles").select("id, full_name").in("id", creatorIds);
+    for (const row of creatorProfiles ?? []) {
+      const n = ((row.full_name as string | null | undefined) ?? "").trim();
+      creatorNames.set(row.id as string, n || "Student");
     }
   }
 
@@ -88,13 +95,15 @@ export default async function TeacherClassroomDashboard({ params }: Props) {
           const logs = p.daily_logs as LogLite[] | null | undefined;
           const inactive = isInactive(p.created_at, logs);
           const last = lastLogDate(logs);
+          const createdBy = p.created_by as string | null | undefined;
+          const studentLabel = createdBy ? (creatorNames.get(createdBy) ?? "Unknown") : "Unknown";
           return (
             <Card key={p.id} className={inactive ? "border-amber-500/60" : undefined}>
               <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0">
                 <div>
                   <CardTitle className="text-lg">{p.title}</CardTitle>
                   <CardDescription>
-                    Members: {counts.get(p.id) ?? 0} · Last log: {last ? last.toLocaleDateString() : "—"}
+                    Student: {studentLabel} · Last log: {last ? last.toLocaleDateString() : "—"}
                   </CardDescription>
                 </div>
                 <div className="flex flex-wrap gap-2">

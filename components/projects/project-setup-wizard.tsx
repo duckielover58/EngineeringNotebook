@@ -460,7 +460,7 @@ export function ProjectSetupWizard({
           <CardHeader>
             <CardTitle>Title page</CardTitle>
             <CardDescription>
-              Capture the problem title, school + course, dates, team photo, and design problem. Team-member names come from the project members list.
+              Capture the problem title, school + course, dates, cover photo, and design problem. This notebook is yours; your name appears on the title from when you created it.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -488,7 +488,7 @@ export function ProjectSetupWizard({
             />
             {teamMembers.length > 0 && (
               <p className="mt-3 text-xs text-muted-foreground">
-                Team members on this notebook:{" "}
+                People on this notebook:{" "}
                 {teamMembers.map((m) => (m.full_name ?? "").trim()).filter((n) => n.length > 0).join(", ") || "—"}
               </p>
             )}
@@ -745,9 +745,9 @@ export function ProjectSetupWizard({
 
             <Separator />
 
-            {/* ── Team members ── */}
+            {/* ── Gantt assignees (labels) ── */}
             <div className="space-y-3">
-              <p className="text-sm font-medium">Team members</p>
+              <p className="text-sm font-medium">People for tasks</p>
               {members.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {members.map((m) => (

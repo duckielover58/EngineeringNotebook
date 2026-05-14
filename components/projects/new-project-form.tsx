@@ -36,9 +36,11 @@ export function NewProjectForm({ classroomId }: { classroomId: string }) {
   return (
     <form onSubmit={onSubmit} className="space-y-4 rounded-xl border bg-card p-6 shadow-sm">
       <div className="space-y-2">
-        <Label htmlFor="title">Team / project title</Label>
-        <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="Notebook title" />
-        <p className="text-xs text-muted-foreground">You can add the team photo and project details on the next step.</p>
+        <Label htmlFor="title">Project title</Label>
+        <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="e.g. Solar oven prototype" />
+        <p className="text-xs text-muted-foreground">
+          Your name is added automatically to the notebook title. You can add a cover photo and details on the next step.
+        </p>
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
       <Button type="submit" disabled={pending}>

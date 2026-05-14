@@ -8,7 +8,6 @@ import { DeleteProjectButton } from "@/components/projects/delete-project-button
 import { DesignBriefCard } from "@/components/projects/design-brief-card";
 import { GanttGridFromData } from "@/components/projects/gantt-grid";
 import { InitialDesignSketchSection } from "@/components/projects/initial-design-sketch-section";
-import { ProjectInvitePanel } from "@/components/projects/project-invite-panel";
 import { TitlePageCard } from "@/components/projects/title-page-card";
 import { TeacherCommentsPanel } from "@/components/teacher/teacher-comments-panel";
 import { Badge } from "@/components/ui/badge";
@@ -31,7 +30,6 @@ function formatStamp(iso: string | null | undefined): string | null {
 }
 
 type Props = { params: Promise<{ projectId: string }> };
-type InviteRow = { id: string; invitee_email: string; status: "pending" | "accepted" | "revoked"; created_at: string };
 
 export default async function ProjectOverviewPage({ params }: Props) {
   const { projectId } = await params;
@@ -64,7 +62,7 @@ export default async function ProjectOverviewPage({ params }: Props) {
           <CardHeader>
             <CardTitle>Notebook setup in progress</CardTitle>
             <CardDescription>
-              The team is still completing setup. This page will show the full notebook after they activate it.
+              The student is still completing setup. This page will show the full notebook after they activate it.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -155,12 +153,6 @@ export default async function ProjectOverviewPage({ params }: Props) {
     : { data: [] as { id: string; full_name: string | null }[] };
   const teamMembers = (memberProfiles ?? []).map((p) => ({ id: p.id, full_name: p.full_name ?? null }));
 
-  const { data: invites } = await supabase
-    .from("project_invites")
-    .select("id, invitee_email, status, created_at")
-    .eq("project_id", projectId)
-    .order("created_at", { ascending: false });
-
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -236,7 +228,7 @@ export default async function ProjectOverviewPage({ params }: Props) {
         <CardHeader>
           <CardTitle>Decision matrix</CardTitle>
           <CardDescription>
-            Each option scored across the team&apos;s criteria.
+            Each option scored against your criteria.
             {matrixUpdatedAt && <> · Last updated {formatStamp(matrixUpdatedAt)}</>}
           </CardDescription>
         </CardHeader>
@@ -303,7 +295,7 @@ export default async function ProjectOverviewPage({ params }: Props) {
           <CardHeader>
             <CardTitle>Conclusion</CardTitle>
             <CardDescription>
-              Final reflections from the team.{" "}
+              Final reflections for this notebook.{" "}
               <Link href={`/projects/${projectId}/conclusion`} className="underline-offset-2 hover:underline">
                 Open conclusion
               </Link>
@@ -337,8 +329,6 @@ export default async function ProjectOverviewPage({ params }: Props) {
           </CardContent>
         </Card>
       )}
-
-      <ProjectInvitePanel projectId={projectId} canInvite={isProjectMember} invites={(invites as InviteRow[]) ?? []} />
 
       {(isClassTeacher || (comments?.length ?? 0) > 0) && (
         <TeacherCommentsPanel
