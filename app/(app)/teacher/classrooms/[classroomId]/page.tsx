@@ -3,7 +3,9 @@ import { notFound, redirect } from "next/navigation";
 
 import { INACTIVE_PROJECT_DAYS } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/server";
+import { isDevTestUser } from "@/lib/dev-test-account";
 import { CoTeacherManager } from "@/components/classrooms/co-teacher-manager";
+import { DevClassroomId } from "@/components/classrooms/dev-classroom-id";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -46,6 +48,9 @@ export default async function TeacherClassroomDashboard({ params }: Props) {
     .maybeSingle();
   if (!teacherMembership) notFound();
 
+  const { data: profile } = await supabase.from("profiles").select("school_name").eq("id", user.id).single();
+  const showDevClassroomId = isDevTestUser(profile?.school_name as string | null | undefined, user.email);
+
   const { data: teacherRows } = await supabase
     .from("classroom_teachers")
     .select("teacher_id, profiles(full_name)")
@@ -81,6 +86,7 @@ export default async function TeacherClassroomDashboard({ params }: Props) {
         <p className="text-muted-foreground">
           {room.name} · Join code <span className="font-mono tracking-widest">{room.join_code}</span>
         </p>
+        {showDevClassroomId && <DevClassroomId id={room.id} />}
       </div>
 
       <CoTeacherManager

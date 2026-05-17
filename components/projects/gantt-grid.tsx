@@ -113,7 +113,7 @@ export function GanttGrid({
               const taskMembers = members.filter((m) => t.memberIds.includes(m.id));
               const taskStart = t.startDay;
               const taskEnd = t.startDay + Math.max(1, t.durationDays);
-              const displayColor = taskMembers[0]?.color ?? t.color;
+              const displayColor = t.color;
               return (
                 <tr key={t.id} className="border-b last:border-0">
                   <td className="border-r px-2 py-1 font-medium" style={{ borderLeftColor: t.color, borderLeftWidth: 3 }}>
@@ -184,7 +184,7 @@ export function GanttGrid({
             const taskMembers = members.filter((m) => t.memberIds.includes(m.id));
             const taskStartWeek = Math.floor(t.startDay / 5);
             const taskWeeks = Math.max(1, Math.ceil(t.durationDays / 5));
-            const displayColor = taskMembers[0]?.color ?? t.color;
+            const displayColor = t.color;
             return (
               <tr key={t.id} className="border-b last:border-0">
                 <td className="border-r px-2 py-1 font-medium" style={{ borderLeftColor: t.color, borderLeftWidth: 3 }}>

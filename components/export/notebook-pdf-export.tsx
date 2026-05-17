@@ -453,7 +453,7 @@ export function NotebookPdfExport({ project, logs }: { project: ProjectPayload; 
                       const cellSpan =
                         viewMode === "days" ? Math.max(1, durationDays) : Math.max(1, Math.ceil(durationDays / 5));
                       const taskColor = t.color || "#6b7280";
-                      const displayColor = taskMembers[0]?.color ?? taskColor;
+                      const displayColor = taskColor;
                       return (
                         <tr key={t.id}>
                           <td style={{ border: "1px solid #ccc", padding: "3px 6px", borderLeft: `3px solid ${taskColor}` }}>

@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
+import { isDevTestUser } from "@/lib/dev-test-account";
 import { CoTeacherManager } from "@/components/classrooms/co-teacher-manager";
+import { DevClassroomId } from "@/components/classrooms/dev-classroom-id";
 import { ConclusionQuestionsEditor } from "@/components/classrooms/conclusion-questions-editor";
 import { DeleteClassroomButton } from "@/components/classrooms/delete-classroom-button";
 import { Button } from "@/components/ui/button";
@@ -23,7 +25,8 @@ export default async function ClassroomDetailPage({ params }: Props) {
   const { data: room, error } = await supabase.from("classrooms").select("id, name, join_code, teacher_id").eq("id", classroomId).single();
   if (error || !room) notFound();
 
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  const { data: profile } = await supabase.from("profiles").select("role, school_name").eq("id", user.id).single();
+  const showDevClassroomId = isDevTestUser(profile?.school_name as string | null | undefined, user.email);
   const { data: teacherMembership } = await supabase
     .from("classroom_teachers")
     .select("teacher_id")
@@ -68,6 +71,7 @@ export default async function ClassroomDetailPage({ params }: Props) {
               Join code: <span className="font-mono font-medium tracking-widest text-foreground">{room.join_code}</span>
             </p>
           )}
+          {showDevClassroomId && <DevClassroomId id={room.id} />}
         </div>
         <div className="flex flex-wrap items-start gap-2">
           {isTeacher && (
