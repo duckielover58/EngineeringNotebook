@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/admin";
+import { isDevTestUser } from "@/lib/dev-test-account";
 import { deleteProjectStorage } from "@/lib/storage-cleanup";
 import type { DesignBrief, GanttData, SketchKind } from "@/types/database";
 
@@ -322,7 +323,21 @@ export async function updateProjectMatrix(
 export async function updateProjectGantt(projectId: string, gantt_data: GanttData) {
   const auth = await requireStudentUser();
   if ("error" in auth) return auth;
-  const { supabase } = auth;
+  const { supabase, userId } = auth;
+
+  const [{ data: project }, { data: authUser }, { data: profile }] = await Promise.all([
+    supabase.from("projects").select("status").eq("id", projectId).single(),
+    supabase.auth.getUser(),
+    supabase.from("profiles").select("school_name").eq("id", userId).single(),
+  ]);
+  if (!project) return { error: "Notebook not found." };
+  if (
+    project.status === "active" &&
+    !isDevTestUser(profile?.school_name as string | null | undefined, authUser.user?.email)
+  ) {
+    return { error: "Gantt chart can only be edited during notebook setup." };
+  }
+
   const { error } = await supabase
     .from("projects")
     .update({ gantt_data, gantt_updated_at: new Date().toISOString() })

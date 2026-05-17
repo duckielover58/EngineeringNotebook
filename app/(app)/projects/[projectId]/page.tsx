@@ -6,7 +6,9 @@ import { optionTotals, sortOptionIndexesByTotal, winningOptionIndex } from "@/li
 import { BrainstormingSketchesSection } from "@/components/projects/brainstorming-sketches-section";
 import { DeleteProjectButton } from "@/components/projects/delete-project-button";
 import { DesignBriefCard } from "@/components/projects/design-brief-card";
+import { GanttChartEditor } from "@/components/projects/gantt-chart-editor";
 import { GanttGridFromData } from "@/components/projects/gantt-grid";
+import { isDevTestUser } from "@/lib/dev-test-account";
 import { InitialDesignSketchSection } from "@/components/projects/initial-design-sketch-section";
 import { TitlePageCard } from "@/components/projects/title-page-card";
 import { TeacherCommentsPanel } from "@/components/teacher/teacher-comments-panel";
@@ -39,7 +41,7 @@ export default async function ProjectOverviewPage({ params }: Props) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  const { data: profile } = await supabase.from("profiles").select("role, school_name").eq("id", user.id).single();
 
   const { data: project, error } = await supabase
     .from("projects")
@@ -89,6 +91,8 @@ export default async function ProjectOverviewPage({ params }: Props) {
     .eq("user_id", user.id)
     .maybeSingle();
   const isProjectMember = profile?.role === "student" && !!memberRow;
+  const canEditGanttAfterSetup =
+    isProjectMember && isDevTestUser(profile?.school_name as string | null | undefined, user.email);
 
   const matrix = (project.matrix_ratings as number[][] | null) ?? [];
   const options: string[] = (project.matrix_options as string[] | null) ?? [];
@@ -277,12 +281,18 @@ export default async function ProjectOverviewPage({ params }: Props) {
         <CardHeader>
           <CardTitle>Gantt chart</CardTitle>
           <CardDescription>
-            {gantt?.startDate ? `Starts ${gantt.startDate}` : "No start date set"} · view: {gantt?.viewMode ?? "weeks"}
+            {canEditGanttAfterSetup
+              ? "Dev test account: you can edit the schedule after setup."
+              : gantt?.startDate
+                ? `Starts ${gantt.startDate} · view: ${gantt?.viewMode ?? "weeks"}`
+                : "No start date set"}
             {ganttUpdatedAt && <> · Last updated {formatStamp(ganttUpdatedAt)}</>}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {!gantt?.tasks?.length ? (
+          {canEditGanttAfterSetup ? (
+            <GanttChartEditor projectId={projectId} initialGantt={gantt} saveLabel="Save Gantt chart" />
+          ) : !gantt?.tasks?.length ? (
             <p className="text-sm text-muted-foreground">No tasks recorded.</p>
           ) : (
             <GanttGridFromData data={gantt} />
