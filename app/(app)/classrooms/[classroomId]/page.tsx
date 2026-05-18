@@ -3,8 +3,8 @@ import { notFound, redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import { isDevTestUser } from "@/lib/dev-test-account";
+import { ClassroomJoinCode } from "@/components/classrooms/classroom-join-code";
 import { CoTeacherManager } from "@/components/classrooms/co-teacher-manager";
-import { DevClassroomId } from "@/components/classrooms/dev-classroom-id";
 import { ConclusionQuestionsEditor } from "@/components/classrooms/conclusion-questions-editor";
 import { DeleteClassroomButton } from "@/components/classrooms/delete-classroom-button";
 import { Button } from "@/components/ui/button";
@@ -26,7 +26,6 @@ export default async function ClassroomDetailPage({ params }: Props) {
   if (error || !room) notFound();
 
   const { data: profile } = await supabase.from("profiles").select("role, school_name").eq("id", user.id).single();
-  const showDevClassroomId = isDevTestUser(profile?.school_name as string | null | undefined, user.email);
   const { data: teacherMembership } = await supabase
     .from("classroom_teachers")
     .select("teacher_id")
@@ -44,6 +43,12 @@ export default async function ClassroomDetailPage({ params }: Props) {
   const canCreate =
     profile?.role === "student" &&
     (await supabase.from("classroom_members").select("user_id").eq("classroom_id", classroomId).eq("user_id", user.id).maybeSingle()).data;
+
+  const showJoinCode =
+    isTeacher ||
+    (profile?.role === "student" &&
+      !!canCreate &&
+      isDevTestUser(profile?.school_name as string | null | undefined, user.email));
 
   const { data: teacherRows } = isTeacher
     ? await supabase
@@ -66,12 +71,7 @@ export default async function ClassroomDetailPage({ params }: Props) {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{room.name}</h1>
-          {isTeacher && (
-            <p className="mt-1 text-muted-foreground">
-              Join code: <span className="font-mono font-medium tracking-widest text-foreground">{room.join_code}</span>
-            </p>
-          )}
-          {showDevClassroomId && <DevClassroomId id={room.id} />}
+          {showJoinCode && <ClassroomJoinCode code={room.join_code} />}
         </div>
         <div className="flex flex-wrap items-start gap-2">
           {isTeacher && (

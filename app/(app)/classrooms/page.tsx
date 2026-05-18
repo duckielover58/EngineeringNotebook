@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { syncProfileRoleFromAuth } from "@/actions/profile";
-import { DevClassroomId } from "@/components/classrooms/dev-classroom-id";
+import { ClassroomJoinCodeBadge } from "@/components/classrooms/classroom-join-code";
 import { createClient } from "@/lib/supabase/server";
 import { isDevTestUser } from "@/lib/dev-test-account";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ export default async function ClassroomsPage() {
   await syncProfileRoleFromAuth();
 
   const { data: profile, error: profileError } = await supabase.from("profiles").select("role, full_name, school_name").eq("id", user.id).single();
-  const showDevClassroomId = isDevTestUser(profile?.school_name as string | null | undefined, user.email);
+  const showDevJoinCode = isDevTestUser(profile?.school_name as string | null | undefined, user.email);
 
   const hasProfile = Boolean(profile) && !profileError;
   /** Map DB role to UI; non-teacher values (including null) → student so join/create is never a blank page. */
@@ -111,11 +111,6 @@ export default async function ClassroomsPage() {
                   <CardTitle className="text-lg">{c.name}</CardTitle>
                   <span className="rounded-md bg-muted px-2 py-1 font-mono text-sm tracking-widest">{c.join_code}</span>
                 </CardHeader>
-                {showDevClassroomId && (
-                  <CardContent className="pt-0">
-                    <DevClassroomId id={c.id} />
-                  </CardContent>
-                )}
                 <CardContent className="flex flex-wrap gap-2">
                   <Button size="sm" asChild>
                     <Link href={`/classrooms/${c.id}`}>Open</Link>
@@ -152,10 +147,12 @@ export default async function ClassroomsPage() {
               if (!c) return null;
               return (
                 <Card key={c.id}>
-                  <CardHeader>
-                    <CardTitle className="text-lg">{c.name}</CardTitle>
-                    <CardDescription>Joined {new Date(row.joined_at).toLocaleDateString()}</CardDescription>
-                    {showDevClassroomId && <DevClassroomId id={c.id} />}
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <div>
+                      <CardTitle className="text-lg">{c.name}</CardTitle>
+                      <CardDescription>Joined {new Date(row.joined_at).toLocaleDateString()}</CardDescription>
+                    </div>
+                    {showDevJoinCode && <ClassroomJoinCodeBadge code={c.join_code} />}
                   </CardHeader>
                   <CardContent>
                     <Button asChild>
