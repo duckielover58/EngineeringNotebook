@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { isDevTestUser } from "@/lib/dev-test-account";
+import { composeNotebookTitle } from "@/lib/notebook-title";
 import { deleteProjectStorage } from "@/lib/storage-cleanup";
 import type { DesignBrief, GanttData, SketchKind } from "@/types/database";
 
@@ -35,7 +36,17 @@ async function requireStudentUser() {
   if (!user) return { error: "You must be signed in." as const };
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
   if (profile?.role !== "student") return { error: "Only students can edit notebooks." as const };
-  return { supabase, userId: user.id };
+  return { supabase, userId: user.id, user };
+}
+
+async function studentDisplayName(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  email: string
+): Promise<string> {
+  const { data: nameRow } = await supabase.from("profiles").select("full_name").eq("id", userId).single();
+  const trimmedName = ((nameRow?.full_name as string | null | undefined) ?? "").trim();
+  return trimmedName || email.split("@")[0]?.trim() || "Student";
 }
 
 export async function createProject(classroomId: string, title: string) {
@@ -43,16 +54,9 @@ export async function createProject(classroomId: string, title: string) {
   if (!t) return { error: "Project title is required." };
   const auth = await requireStudentUser();
   if ("error" in auth) return auth;
-  const { supabase, userId } = auth;
-
-  const [{ data: authUser }, { data: nameRow }] = await Promise.all([
-    supabase.auth.getUser(),
-    supabase.from("profiles").select("full_name").eq("id", userId).single(),
-  ]);
-  const email = authUser.user?.email ?? "";
-  const trimmedName = ((nameRow?.full_name as string | null | undefined) ?? "").trim();
-  const displayName = trimmedName || email.split("@")[0]?.trim() || "Student";
-  const composedTitle = `${displayName} — ${t}`;
+  const { supabase, userId, user } = auth;
+  const displayName = await studentDisplayName(supabase, userId, user.email ?? "");
+  const composedTitle = composeNotebookTitle(displayName, t);
 
   const { data: projectId, error } = await supabase.rpc("create_project_for_student", {
     p_classroom: classroomId,
@@ -83,6 +87,7 @@ export async function updateProjectBasics(
 // ---------------------------------------------------------------------------
 
 export type TitlePagePayload = {
+  notebook_title_suffix?: string;
   problem_title?: string | null;
   school_name?: string | null;
   course_title?: string | null;
@@ -95,9 +100,15 @@ export type TitlePagePayload = {
 export async function updateProjectTitlePage(projectId: string, payload: TitlePagePayload) {
   const auth = await requireStudentUser();
   if ("error" in auth) return auth;
-  const { supabase } = auth;
+  const { supabase, userId, user } = auth;
 
   const update: Record<string, unknown> = {};
+  if (payload.notebook_title_suffix !== undefined) {
+    const suffix = payload.notebook_title_suffix.trim();
+    if (!suffix) return { error: "Notebook title is required." };
+    const displayName = await studentDisplayName(supabase, userId, user.email ?? "");
+    update.title = composeNotebookTitle(displayName, suffix);
+  }
   if (payload.problem_title !== undefined) update.problem_title = payload.problem_title;
   if (payload.school_name !== undefined) update.school_name = payload.school_name;
   if (payload.course_title !== undefined) update.course_title = payload.course_title;
@@ -105,15 +116,25 @@ export async function updateProjectTitlePage(projectId: string, payload: TitlePa
   if (payload.end_date !== undefined) update.end_date = payload.end_date;
   if (payload.design_problem !== undefined) update.design_problem = payload.design_problem;
   if (payload.team_photo_url !== undefined) update.team_photo_url = payload.team_photo_url;
-  if (Object.keys(update).length === 0) return { ok: true as const, updatedAt: null as string | null };
+  if (Object.keys(update).length === 0) {
+    return { ok: true as const, updatedAt: null as string | null, notebookTitle: null as string | null };
+  }
 
   const now = new Date().toISOString();
   update.title_page_updated_at = now;
 
+  const { data: projectRow } = await supabase.from("projects").select("classroom_id").eq("id", projectId).single();
+
   const { error } = await supabase.from("projects").update(update).eq("id", projectId);
   if (error) return { error: error.message };
   revalidatePath(`/projects/${projectId}`);
-  return { ok: true as const, updatedAt: now };
+  if (projectRow?.classroom_id) {
+    revalidatePath(`/classrooms/${projectRow.classroom_id}`);
+    revalidatePath("/classrooms");
+  }
+  const notebookTitle =
+    typeof update.title === "string" ? update.title : null;
+  return { ok: true as const, updatedAt: now, notebookTitle };
 }
 
 // ---------------------------------------------------------------------------

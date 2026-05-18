@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { updateProjectTitlePage } from "@/actions/projects";
+import { parseNotebookTitleSuffix } from "@/lib/notebook-title";
 import { createClient } from "@/lib/supabase/client";
 import { uploadProjectFile } from "@/lib/storage-upload";
 import { Button } from "@/components/ui/button";
@@ -50,18 +51,21 @@ function formatDate(iso: string | null | undefined): string | null {
  */
 export function TitlePageForm({
   projectId,
+  notebookTitle,
   initial,
   onSavedAction,
   busyExternally,
   actionsSlot,
 }: {
   projectId: string;
+  notebookTitle: string;
   initial: TitlePageData;
-  onSavedAction: (saved: TitlePageData) => void;
+  onSavedAction: (saved: TitlePageData, notebookTitle?: string) => void;
   busyExternally?: boolean;
   actionsSlot: (ctx: { save: () => Promise<boolean>; pending: boolean }) => ReactNode;
 }) {
   const router = useRouter();
+  const [notebookTitleSuffix, setNotebookTitleSuffix] = useState(() => parseNotebookTitleSuffix(notebookTitle));
   const [problemTitle, setProblemTitle] = useState(initial.problem_title ?? "");
   const [schoolName, setSchoolName] = useState(initial.school_name ?? "");
   const [courseTitle, setCourseTitle] = useState(initial.course_title ?? "");
@@ -100,6 +104,7 @@ export function TitlePageForm({
         nextPhotoUrl = await uploadProjectFile(supabase, "team-photos", projectId, photoFile);
       }
       const res = await updateProjectTitlePage(projectId, {
+        notebook_title_suffix: notebookTitleSuffix,
         problem_title: problemTitle.trim() || null,
         school_name: schoolName.trim() || null,
         course_title: courseTitle.trim() || null,
@@ -117,16 +122,21 @@ export function TitlePageForm({
           ? res.updatedAt
           : initial.title_page_updated_at;
       if (nextPhotoUrl) setTeamPhotoUrl(nextPhotoUrl);
-      onSavedAction({
-        problem_title: problemTitle.trim() || null,
-        school_name: schoolName.trim() || null,
-        course_title: courseTitle.trim() || null,
-        start_date: startDate || null,
-        end_date: endDate || null,
-        design_problem: designProblem.trim() || null,
-        team_photo_url: nextPhotoUrl ?? teamPhotoUrl,
-        title_page_updated_at: savedAt,
-      });
+      const savedNotebookTitle =
+        "notebookTitle" in res && typeof res.notebookTitle === "string" ? res.notebookTitle : undefined;
+      onSavedAction(
+        {
+          problem_title: problemTitle.trim() || null,
+          school_name: schoolName.trim() || null,
+          course_title: courseTitle.trim() || null,
+          start_date: startDate || null,
+          end_date: endDate || null,
+          design_problem: designProblem.trim() || null,
+          team_photo_url: nextPhotoUrl ?? teamPhotoUrl,
+          title_page_updated_at: savedAt,
+        },
+        savedNotebookTitle
+      );
       setPhotoFile(null);
       router.refresh();
       return true;
@@ -142,6 +152,21 @@ export function TitlePageForm({
 
   return (
     <div className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="notebook-title">Notebook title</Label>
+        <Input
+          id="notebook-title"
+          value={notebookTitleSuffix}
+          onChange={(e) => setNotebookTitleSuffix(e.target.value)}
+          placeholder="e.g. Solar oven prototype"
+          disabled={busy}
+          required
+        />
+        <p className="text-xs text-muted-foreground">
+          Shown in the page header and class list. Your name is added automatically.
+        </p>
+      </div>
+
       <div className="space-y-2">
         <Label htmlFor="problem-title">Title of the problem</Label>
         <Input
@@ -241,9 +266,11 @@ export function TitlePageForm({
 }
 
 function TitlePageView({
+  notebookTitle,
   data,
   teamMembers,
 }: {
+  notebookTitle: string;
   data: TitlePageData;
   teamMembers: TeamMember[];
 }) {
@@ -256,6 +283,10 @@ function TitlePageView({
 
   return (
     <div className="space-y-4">
+      <div>
+        <p className="text-sm font-medium">Notebook title</p>
+        <p className="text-sm text-muted-foreground">{notebookTitle}</p>
+      </div>
       <div>
         <h2 className="text-xl font-semibold tracking-tight">
           {data.problem_title?.trim() || <span className="italic text-muted-foreground">Untitled problem</span>}
@@ -306,16 +337,19 @@ function TitlePageView({
 
 export function TitlePageCard({
   projectId,
+  notebookTitle: initialNotebookTitle,
   initial,
   teamMembers,
   canEdit,
 }: {
   projectId: string;
+  notebookTitle: string;
   initial: TitlePageData;
   teamMembers: TeamMember[];
   canEdit: boolean;
 }) {
   const [data, setData] = useState<TitlePageData>(initial);
+  const [notebookTitle, setNotebookTitle] = useState(initialNotebookTitle);
   const [editing, setEditing] = useState(false);
 
   return (
@@ -340,9 +374,11 @@ export function TitlePageCard({
         {editing ? (
           <TitlePageForm
             projectId={projectId}
+            notebookTitle={notebookTitle}
             initial={data}
-            onSavedAction={(saved) => {
+            onSavedAction={(saved, savedNotebookTitle) => {
               setData(saved);
+              if (savedNotebookTitle) setNotebookTitle(savedNotebookTitle);
               setEditing(false);
             }}
             actionsSlot={({ save, pending }) => (
@@ -357,7 +393,7 @@ export function TitlePageCard({
             )}
           />
         ) : (
-          <TitlePageView data={data} teamMembers={teamMembers} />
+          <TitlePageView notebookTitle={notebookTitle} data={data} teamMembers={teamMembers} />
         )}
       </CardContent>
     </Card>

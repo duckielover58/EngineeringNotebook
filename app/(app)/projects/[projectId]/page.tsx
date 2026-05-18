@@ -172,6 +172,7 @@ export default async function ProjectOverviewPage({ params }: Props) {
 
       <TitlePageCard
         projectId={projectId}
+        notebookTitle={project.title}
         teamMembers={teamMembers}
         canEdit={isProjectMember}
         initial={{

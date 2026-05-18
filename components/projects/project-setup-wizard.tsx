@@ -79,6 +79,8 @@ export function ProjectSetupWizard({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
+  const [notebookTitle, setNotebookTitle] = useState(project.title);
+
   const [titlePage, setTitlePage] = useState<TitlePageData>({
     problem_title: project.problem_title,
     school_name: project.school_name,
@@ -293,7 +295,7 @@ export function ProjectSetupWizard({
     <div className="mx-auto max-w-4xl space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Project setup</h1>
-        <p className="text-muted-foreground">{project.title}</p>
+        <p className="text-muted-foreground">{notebookTitle}</p>
       </div>
 
       <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
@@ -323,8 +325,12 @@ export function ProjectSetupWizard({
           <CardContent>
             <TitlePageForm
               projectId={project.id}
+              notebookTitle={notebookTitle}
               initial={titlePage}
-              onSavedAction={(saved) => setTitlePage(saved)}
+              onSavedAction={(saved, savedNotebookTitle) => {
+                setTitlePage(saved);
+                if (savedNotebookTitle) setNotebookTitle(savedNotebookTitle);
+              }}
               actionsSlot={({ save, pending: formPending }) => (
                 <>
                   <Button
