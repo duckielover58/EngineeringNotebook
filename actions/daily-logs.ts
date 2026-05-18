@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 
+import { createServiceClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { publicUrlToStoragePath } from "@/lib/storage-upload";
 
 async function requireStudentUser() {
   const supabase = await createClient();
@@ -47,7 +49,7 @@ export async function updateDailyLog(logId: string, projectId: string, content: 
   const { supabase } = auth;
   const { data: row, error: fetchError } = await supabase
     .from("daily_logs")
-    .select("id, is_locked, created_at")
+    .select("id, is_locked, created_at, image_urls")
     .eq("id", logId)
     .single();
 
@@ -56,9 +58,25 @@ export async function updateDailyLog(logId: string, projectId: string, content: 
   const deadline = new Date(row.created_at).getTime() + 24 * 60 * 60 * 1000;
   if (Date.now() >= deadline) return { error: "The 24-hour edit window has passed." };
 
+  const previousUrls = (row.image_urls as string[] | null) ?? [];
+  const removedUrls = previousUrls.filter((u) => !image_urls.includes(u));
+
   const { error } = await supabase.from("daily_logs").update({ content: text, image_urls }).eq("id", logId);
 
   if (error) return { error: error.message };
+
+  if (removedUrls.length) {
+    const admin = createServiceClient();
+    if (admin) {
+      const paths = removedUrls
+        .map((u) => publicUrlToStoragePath(u, "log-images"))
+        .filter((p): p is string => !!p);
+      if (paths.length) {
+        const { error: storageError } = await admin.storage.from("log-images").remove(paths);
+        if (storageError) return { error: storageError.message };
+      }
+    }
+  }
   revalidatePath(`/projects/${projectId}/logs`);
   return { ok: true as const };
 }

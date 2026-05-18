@@ -2,11 +2,19 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/types/database";
 
-type Bucket = "team-photos" | "log-images" | "sketches";
+export type ProjectStorageBucket = "team-photos" | "log-images" | "sketches";
+
+/** Path inside a bucket from a Supabase public object URL, or null if not recognized. */
+export function publicUrlToStoragePath(publicUrl: string, bucket: ProjectStorageBucket): string | null {
+  const marker = `/storage/v1/object/public/${bucket}/`;
+  const idx = publicUrl.indexOf(marker);
+  if (idx === -1) return null;
+  return decodeURIComponent(publicUrl.slice(idx + marker.length));
+}
 
 export async function uploadProjectFile(
   supabase: SupabaseClient<Database>,
-  bucket: Bucket,
+  bucket: ProjectStorageBucket,
   projectId: string,
   file: File
 ): Promise<string> {

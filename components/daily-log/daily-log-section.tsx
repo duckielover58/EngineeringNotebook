@@ -110,6 +110,18 @@ function LogCard({
           {urls.map((u) => (
             <div key={u} className="relative aspect-video overflow-hidden rounded-md border bg-muted">
               <Image src={u} alt="" fill className="object-cover" sizes="120px" />
+              {effectiveEditable && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-1 top-1 h-7 px-2 bg-background/80 backdrop-blur"
+                  onClick={() => setUrls((prev) => prev.filter((url) => url !== u))}
+                  disabled={pending}
+                >
+                  Remove
+                </Button>
+              )}
             </div>
           ))}
         </div>
