@@ -8,6 +8,7 @@ import { updateProjectTitlePage } from "@/actions/projects";
 import { createClient } from "@/lib/supabase/client";
 import { uploadProjectFile } from "@/lib/storage-upload";
 import { Button } from "@/components/ui/button";
+import { PhotoLightbox } from "@/components/ui/photo-lightbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -191,14 +192,16 @@ export function TitlePageForm({
         {previewSrc ? (
           <div className="space-y-1">
             <div className="relative aspect-video w-full max-w-md overflow-hidden rounded-md border bg-muted">
-              {previewIsLocal ? (
-                // Use a plain <img> for the local object URL preview so Next/Image's
-                // optimizer doesn't try to fetch a blob: URL.
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={previewSrc} alt="Selected team photo preview" className="absolute inset-0 h-full w-full object-cover" />
-              ) : (
-                <Image src={previewSrc} alt="Team" fill className="object-cover" sizes="(max-width:768px) 100vw, 50vw" />
-              )}
+              <PhotoLightbox src={previewSrc} alt="Team photo" className="absolute inset-0 block h-full w-full">
+                {previewIsLocal ? (
+                  // Use a plain <img> for the local object URL preview so Next/Image's
+                  // optimizer doesn't try to fetch a blob: URL.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={previewSrc} alt="Selected team photo preview" className="absolute inset-0 h-full w-full object-cover" />
+                ) : (
+                  <Image src={previewSrc} alt="Team" fill className="object-cover" sizes="(max-width:768px) 100vw, 50vw" />
+                )}
+              </PhotoLightbox>
             </div>
             <p className="text-xs text-muted-foreground">
               {previewIsLocal ? "Selected file (not yet saved)" : "Saved team photo"}
@@ -272,7 +275,9 @@ function TitlePageView({
 
       {data.team_photo_url ? (
         <div className="relative aspect-video w-full max-w-md overflow-hidden rounded-md border bg-muted">
-          <Image src={data.team_photo_url} alt="Team" fill className="object-cover" sizes="(max-width:768px) 100vw, 50vw" />
+          <PhotoLightbox src={data.team_photo_url} alt="Team photo" className="absolute inset-0 block h-full w-full">
+            <Image src={data.team_photo_url} alt="Team" fill className="object-cover" sizes="(max-width:768px) 100vw, 50vw" />
+          </PhotoLightbox>
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">No team photo uploaded.</p>

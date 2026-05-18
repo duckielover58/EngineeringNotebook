@@ -8,6 +8,7 @@ import { addProjectSketch, removeProjectSketch } from "@/actions/projects";
 import { createClient } from "@/lib/supabase/client";
 import { uploadProjectFile } from "@/lib/storage-upload";
 import { Button } from "@/components/ui/button";
+import { PhotoLightbox } from "@/components/ui/photo-lightbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import type { ProjectSketch } from "@/types/database";
@@ -89,13 +90,15 @@ export function InitialDesignSketchSection({ projectId, initialSketches, canEdit
             {sketches.map((s) => (
               <div key={s.id} className="space-y-1">
                 <div className="relative aspect-video overflow-hidden rounded-md border bg-muted">
-                  <Image src={s.url} alt="Initial design sketch" fill className="object-cover" sizes="200px" />
+                  <PhotoLightbox src={s.url} alt="Initial design sketch" className="absolute inset-0 block h-full w-full">
+                    <Image src={s.url} alt="Initial design sketch" fill className="object-cover" sizes="200px" />
+                  </PhotoLightbox>
                   {canEdit && (
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="absolute right-1 top-1 h-7 px-2 bg-background/80 backdrop-blur"
+                      className="absolute right-1 top-1 z-10 h-7 px-2 bg-background/80 backdrop-blur"
                       onClick={() => remove(s.id)}
                       disabled={pending}
                     >

@@ -10,6 +10,7 @@ import { useLogEditable } from "@/hooks/use-log-editable";
 import { createClient } from "@/lib/supabase/client";
 import { uploadProjectFile } from "@/lib/storage-upload";
 import { Button } from "@/components/ui/button";
+import { PhotoLightbox } from "@/components/ui/photo-lightbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -109,13 +110,15 @@ function LogCard({
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           {urls.map((u) => (
             <div key={u} className="relative aspect-video overflow-hidden rounded-md border bg-muted">
-              <Image src={u} alt="" fill className="object-cover" sizes="120px" />
+              <PhotoLightbox src={u} alt="Daily log photo" className="absolute inset-0 block h-full w-full">
+                <Image src={u} alt="" fill className="object-cover" sizes="120px" />
+              </PhotoLightbox>
               {effectiveEditable && (
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="absolute right-1 top-1 h-7 px-2 bg-background/80 backdrop-blur"
+                  className="absolute right-1 top-1 z-10 h-7 px-2 bg-background/80 backdrop-blur"
                   onClick={() => setUrls((prev) => prev.filter((url) => url !== u))}
                   disabled={pending}
                 >

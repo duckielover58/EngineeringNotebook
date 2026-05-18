@@ -15,6 +15,7 @@ import type {
   ProjectSketch,
 } from "@/types/database";
 import { Button } from "@/components/ui/button";
+import { PhotoLightbox } from "@/components/ui/photo-lightbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 type ProjectPayload = {
@@ -185,12 +186,14 @@ export function NotebookPdfExport({ project, logs }: { project: ProjectPayload; 
             </p>
             {project.team_photo_url && (
               <div style={{ marginBottom: 8 }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={project.team_photo_url}
-                  alt=""
-                  style={{ maxWidth: 400, border: "1px solid #ddd" }}
-                />
+                <PhotoLightbox src={project.team_photo_url} alt="Team photo" className="inline-block">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={project.team_photo_url}
+                    alt=""
+                    style={{ maxWidth: 400, border: "1px solid #ddd" }}
+                  />
+                </PhotoLightbox>
               </div>
             )}
             <p style={{ fontSize: 11, marginBottom: 6 }}>
@@ -306,8 +309,10 @@ export function NotebookPdfExport({ project, logs }: { project: ProjectPayload; 
             <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
               {project.brainstorm_sketches.map((s) => (
                 <div key={s.id} style={{ width: 200 }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={s.url} alt="" style={{ width: 200, height: 140, objectFit: "cover", border: "1px solid #ddd" }} />
+                  <PhotoLightbox src={s.url} alt="Brainstorming sketch" className="block w-full">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={s.url} alt="" style={{ width: 200, height: 140, objectFit: "cover", border: "1px solid #ddd" }} />
+                  </PhotoLightbox>
                   <p style={{ fontSize: 10, color: "#555", marginTop: 4 }}>
                     {s.member_label ? (
                       <>
@@ -386,8 +391,10 @@ export function NotebookPdfExport({ project, logs }: { project: ProjectPayload; 
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {project.initial_design_sketches.map((s) => (
                   <div key={s.id} style={{ width: 200 }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={s.url} alt="" style={{ width: 200, height: 140, objectFit: "cover", border: "1px solid #ddd" }} />
+                    <PhotoLightbox src={s.url} alt="Initial design sketch" className="block w-full">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={s.url} alt="" style={{ width: 200, height: 140, objectFit: "cover", border: "1px solid #ddd" }} />
+                    </PhotoLightbox>
                     <p style={{ fontSize: 10, color: "#555", marginTop: 4 }}>Uploaded {fmtDate(s.created_at)}</p>
                   </div>
                 ))}
@@ -509,8 +516,10 @@ export function NotebookPdfExport({ project, logs }: { project: ProjectPayload; 
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
                 {project.math_images.map((img) => (
                   <div key={img.id} style={{ width: 200 }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={img.url} alt="" style={{ width: 200, height: 140, objectFit: "cover", border: "1px solid #ddd" }} />
+                    <PhotoLightbox src={img.url} alt="Math work" className="block w-full">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={img.url} alt="" style={{ width: 200, height: 140, objectFit: "cover", border: "1px solid #ddd" }} />
+                    </PhotoLightbox>
                     <p style={{ fontSize: 10, color: "#555", marginTop: 4 }}>Uploaded {fmtDate(img.created_at)}</p>
                   </div>
                 ))}
@@ -551,8 +560,10 @@ export function NotebookPdfExport({ project, logs }: { project: ProjectPayload; 
                 <p>{l.content}</p>
                 <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
                   {l.image_urls.map((u) => (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img key={u} src={u} alt="" style={{ width: 120, height: 90, objectFit: "cover" }} />
+                    <PhotoLightbox key={u} src={u} alt="Daily log photo" className="inline-block">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={u} alt="" style={{ width: 120, height: 90, objectFit: "cover" }} />
+                    </PhotoLightbox>
                   ))}
                 </div>
               </div>
@@ -563,8 +574,10 @@ export function NotebookPdfExport({ project, logs }: { project: ProjectPayload; 
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {project.final_sketches.map((s) => (
                 <div key={s.id} style={{ width: 200 }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={s.url} alt="" style={{ width: 200, height: 140, objectFit: "cover", border: "1px solid #ddd" }} />
+                  <PhotoLightbox src={s.url} alt="Final sketch" className="block w-full">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={s.url} alt="" style={{ width: 200, height: 140, objectFit: "cover", border: "1px solid #ddd" }} />
+                  </PhotoLightbox>
                   <p style={{ fontSize: 10, color: "#555", marginTop: 4 }}>Uploaded {fmtDate(s.created_at)}</p>
                 </div>
               ))}

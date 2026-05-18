@@ -8,6 +8,7 @@ import { addMathImage, removeMathImage, updateProjectMath } from "@/actions/proj
 import { createClient } from "@/lib/supabase/client";
 import { uploadProjectFile } from "@/lib/storage-upload";
 import { Button } from "@/components/ui/button";
+import { PhotoLightbox } from "@/components/ui/photo-lightbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -157,11 +158,11 @@ export function MathSectionForm({
             <div className="grid gap-3 sm:grid-cols-3">
               {images.map((img) => (
                 <div key={img.id} className="space-y-1">
-                  <a href={img.url} target="_blank" rel="noreferrer" className="block">
+                  <PhotoLightbox src={img.url} alt="Math work" className="block w-full">
                     <div className="relative aspect-video overflow-hidden rounded-md border bg-muted">
                       <Image src={img.url} alt="Math work" fill className="object-cover" sizes="200px" />
                     </div>
-                  </a>
+                  </PhotoLightbox>
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-xs text-muted-foreground">Uploaded {formatStamp(img.created_at)}</p>
                     {canEdit && (
