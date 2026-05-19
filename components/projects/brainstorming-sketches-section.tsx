@@ -12,6 +12,7 @@ import { PhotoLightbox } from "@/components/ui/photo-lightbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { formatStamp } from "@/lib/format-stamp";
 import type { ProjectSketch } from "@/types/database";
 
 type Props = {
@@ -19,13 +20,6 @@ type Props = {
   initialSketches: ProjectSketch[];
   canEdit: boolean;
 };
-
-function formatStamp(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleString();
-}
 
 type LabelStatus = "idle" | "saving" | "saved" | "error";
 

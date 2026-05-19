@@ -7,14 +7,8 @@ import { upsertConclusionAnswer } from "@/actions/projects";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { formatStamp } from "@/lib/format-stamp";
 import type { ConclusionAnswer, ConclusionQuestion } from "@/types/database";
-
-function formatStamp(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleString();
-}
 
 export function ConclusionSection({
   projectId,

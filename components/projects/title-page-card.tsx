@@ -14,6 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { formatStamp } from "@/lib/format-stamp";
 
 export type TitlePageData = {
   problem_title: string | null;
@@ -27,13 +28,6 @@ export type TitlePageData = {
 };
 
 export type TeamMember = { id: string; full_name: string | null };
-
-function formatStamp(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleString();
-}
 
 function formatDate(iso: string | null | undefined): string | null {
   if (!iso) return null;

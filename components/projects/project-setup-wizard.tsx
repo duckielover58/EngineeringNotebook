@@ -12,6 +12,7 @@ import {
 } from "@/actions/projects";
 import { createClient } from "@/lib/supabase/client";
 import { uploadProjectFile } from "@/lib/storage-upload";
+import { formatStamp } from "@/lib/format-stamp";
 import { optionTotals, winningOptionIndex } from "@/lib/matrix";
 import type { DesignBrief, GanttData, ProjectSketch, ProjectStatus } from "@/types/database";
 import { GanttChartEditor } from "@/components/projects/gantt-chart-editor";
@@ -47,13 +48,6 @@ type ProjectRow = {
   matrix_ratings: number[][] | null;
   gantt_data: GanttData | null;
 };
-
-function formatStamp(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleString();
-}
 
 function emptyCriteria(): string[] {
   return ["", "", "", ""];

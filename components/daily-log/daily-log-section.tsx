@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 
 import { addProjectComment } from "@/actions/comments";
 import { createDailyLog, updateDailyLog } from "@/actions/daily-logs";
+import { formatStamp } from "@/lib/format-stamp";
 import { useLogEditable } from "@/hooks/use-log-editable";
 import { createClient } from "@/lib/supabase/client";
 import { uploadProjectFile } from "@/lib/storage-upload";
@@ -101,7 +102,7 @@ function LogCard({
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0">
         <div>
           <CardTitle className="text-base">Log</CardTitle>
-          <CardDescription>{new Date(log.created_at).toLocaleString()}</CardDescription>
+          <CardDescription>{formatStamp(log.created_at)}</CardDescription>
         </div>
         {lockedLabel && <span className="text-xs font-medium text-muted-foreground">{lockedLabel}</span>}
       </CardHeader>
@@ -150,7 +151,7 @@ function LogCard({
                   <li key={c.id} className="rounded border bg-yellow-50/80 p-2 text-xs dark:bg-yellow-950/30">
                     <div className="mb-1 flex items-center justify-between gap-2">
                       <span className="font-semibold text-foreground">{author}</span>
-                      <span className="text-muted-foreground">{new Date(c.created_at).toLocaleString()}</span>
+                      <span className="text-muted-foreground">{formatStamp(c.created_at)}</span>
                     </div>
                     <p className="whitespace-pre-wrap">{c.body}</p>
                   </li>

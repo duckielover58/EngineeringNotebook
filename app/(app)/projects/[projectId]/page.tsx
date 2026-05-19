@@ -9,6 +9,7 @@ import { DesignBriefCard } from "@/components/projects/design-brief-card";
 import { GanttChartEditor } from "@/components/projects/gantt-chart-editor";
 import { GanttGridFromData } from "@/components/projects/gantt-grid";
 import { isDevTestUser } from "@/lib/dev-test-account";
+import { formatStamp } from "@/lib/format-stamp";
 import { InitialDesignSketchSection } from "@/components/projects/initial-design-sketch-section";
 import { TitlePageCard } from "@/components/projects/title-page-card";
 import { TeacherCommentsPanel } from "@/components/teacher/teacher-comments-panel";
@@ -23,13 +24,6 @@ import type {
   GanttData,
   ProjectSketch,
 } from "@/types/database";
-
-function formatStamp(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleString();
-}
 
 type Props = { params: Promise<{ projectId: string }> };
 
