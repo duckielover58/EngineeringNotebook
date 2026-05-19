@@ -9,7 +9,6 @@ import { DesignBriefCard } from "@/components/projects/design-brief-card";
 import { GanttChartEditor } from "@/components/projects/gantt-chart-editor";
 import { GanttGridFromData } from "@/components/projects/gantt-grid";
 import { isDevTestUser } from "@/lib/dev-test-account";
-import { formatStamp } from "@/lib/format-stamp";
 import { InitialDesignSketchSection } from "@/components/projects/initial-design-sketch-section";
 import { TitlePageCard } from "@/components/projects/title-page-card";
 import { TeacherCommentsPanel } from "@/components/teacher/teacher-comments-panel";
@@ -18,8 +17,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type {
-  ConclusionAnswer,
-  ConclusionQuestion,
   DesignBrief,
   GanttData,
   ProjectSketch,
@@ -108,21 +105,6 @@ export default async function ProjectOverviewPage({ params }: Props) {
   const allSketches = (sketchRows as ProjectSketch[] | null) ?? [];
   const brainstormSketches = allSketches.filter((s) => s.kind === "brainstorming");
   const initialDesignSketches = allSketches.filter((s) => s.kind === "initial_design");
-
-  const { data: conclusionQuestions } = project.classroom_id
-    ? await supabase
-        .from("classroom_conclusion_questions")
-        .select("id, classroom_id, prompt, position, created_at, updated_at")
-        .eq("classroom_id", project.classroom_id)
-        .order("position", { ascending: true })
-    : { data: [] as ConclusionQuestion[] };
-  const { data: conclusionAnswers } = await supabase
-    .from("project_conclusion_answers")
-    .select("id, project_id, question_id, body, answered_by, created_at, updated_at")
-    .eq("project_id", projectId);
-  const answersByQuestion: Record<string, ConclusionAnswer> = Object.fromEntries(
-    ((conclusionAnswers as ConclusionAnswer[] | null) ?? []).map((a) => [a.question_id, a]),
-  );
 
   const { data: comments } = await supabase
     .from("project_comments")
@@ -294,46 +276,6 @@ export default async function ProjectOverviewPage({ params }: Props) {
           )}
         </CardContent>
       </Card>
-
-      {(conclusionQuestions ?? []).length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Conclusion</CardTitle>
-            <CardDescription>
-              Final reflections for this notebook.{" "}
-              <Link href={`/projects/${projectId}/conclusion`} className="underline-offset-2 hover:underline">
-                Open conclusion
-              </Link>
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-3 text-sm">
-              {(conclusionQuestions as ConclusionQuestion[]).map((q, idx) => {
-                const answer = answersByQuestion[q.id];
-                const snippet = (answer?.body ?? "").trim();
-                const truncated = snippet.length > 240 ? `${snippet.slice(0, 240)}…` : snippet;
-                return (
-                  <li key={q.id} className="space-y-1 rounded-md border bg-muted/30 p-3">
-                    <p className="font-medium">
-                      <span className="text-muted-foreground">{idx + 1}.</span> {q.prompt}
-                    </p>
-                    {snippet ? (
-                      <p className="whitespace-pre-wrap text-muted-foreground">{truncated}</p>
-                    ) : (
-                      <p className="italic text-muted-foreground">No answer yet.</p>
-                    )}
-                    {answer?.updated_at && (
-                      <p className="text-xs text-muted-foreground">
-                        Last updated {formatStamp(answer.updated_at)}
-                      </p>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
 
       {(isClassTeacher || (comments?.length ?? 0) > 0) && (
         <TeacherCommentsPanel
